@@ -1,0 +1,46 @@
+# Dota 2 GSI Listener Configuration
+server:
+  host: "127.0.0.1"   # 监听地址 (127.0.0.1 = 仅本机)
+  port: 3000            # 监听端口 (需与 Dota 2 GSI 配置中的 uri 一致)
+
+logging:
+  # 日志输出目录
+  log_dir: "./logs"
+  # 是否在控制台打印 JSON (方便实时查看)
+  console_pretty_print: true
+  # 控制台最大打印深度 (防止刷屏, 0 = 不限制)
+  console_max_depth: 3
+  # 每个游戏会话一个日志文件 (按启动时间命名)
+  session_file: true
+  # 是否记录原始 JSON 行 (一行一条记录)
+  json_lines: true
+
+# 视野追踪（基于 minimap 数据对比）
+vision:
+  # 是否启用敌方视野检测
+  enabled: true
+  # 视野事件单独日志
+  event_log_file: "./logs/vision_events.jsonl"
+
+# AI 教练建议（DeepSeek API）
+ai_advisor:
+  # 是否启用 AI 教练
+  enabled: true
+  # DeepSeek API Key（必填）
+  api_key: ""
+  # API 地址
+  base_url: "https://api.deepseek.com"
+  # 模型名称
+  model: "deepseek-v4-pro"
+  # 查询间隔（游戏内分钟数）
+  interval_minutes: 1
+  # 最大回复 token 数（分析+指令+JSON结构，需要更多空间）
+  max_tokens: 500
+  # 创造性参数（低温度减少废话和JSON格式错误）
+  temperature: 0.2
+  # 系统提示词文件路径（优先级高于 system_prompt 字段）
+  system_prompt_file: "./AIPromt.md"
+  # 系统提示词（仅 system_prompt_file 不存在时生效）
+  system_prompt: "你是一个专业的 Dota 2 教练。直接给出建议，不要解释。"
+  # 提示词日志目录
+  prompt_log_dir: "./logs"
