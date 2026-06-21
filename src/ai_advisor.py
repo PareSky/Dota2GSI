@@ -404,6 +404,8 @@ class AiAdvisor:
         player = data.get("player", {})
 
         level = hero.get("level", 0)
+        health_pct = hero.get("health_percent", 0)
+        mana_pct = hero.get("mana_percent", 0)
         kills = player.get("kills", 0)
         deaths = player.get("deaths", 0)
         assists = player.get("assists", 0)
@@ -413,29 +415,36 @@ class AiAdvisor:
         xpm = player.get("xpm", 0)
         gold = player.get("gold", 0)
 
-        # 装备
+        # 装备 + 冷却时间
         items_data = data.get("items", {})
         item_names: List[str] = []
         for slot_key in AiAdvisor.ITEM_SLOTS:
             slot = items_data.get(slot_key, {})
             name = slot.get("name", "")
             if name and name != "empty":
-                item_names.append(name.replace("item_", ""))
+                short_name = name.replace("item_", "")
+                cd = slot.get("cooldown_time_remaining", 0) or 0
+                if cd > 0:
+                    short_name += f"(cd:{cd:.0f}s)"
+                item_names.append(short_name)
 
-        # 技能等级
+        # 技能等级 + 冷却时间
         abilities_data = data.get("abilities", {})
         skill_levels: List[str] = []
         for ab_key in AiAdvisor.ABILITY_SLOTS:
             ab = abilities_data.get(ab_key, {})
             lv = ab.get("level", 0)
             name = ab.get("name", "")
+            cd = ab.get("cooldown_time_remaining", 0) or 0
             if name:
                 short = name.split(".")[-1] if "." in name else name
                 parts = short.split("_", 1)
                 short = parts[1] if len(parts) > 1 else short
-                skill_levels.append(f"{short}:lv{lv}")
+                cd_str = f"(cd:{cd:.0f}s)" if cd > 0 else ""
+                skill_levels.append(f"{short}:lv{lv}{cd_str}")
             else:
-                skill_levels.append(f"技能{ab_key[-1]}:lv{lv}")
+                cd_str = f"(cd:{cd:.0f}s)" if cd > 0 else ""
+                skill_levels.append(f"技能{ab_key[-1]}:lv{lv}{cd_str}")
 
         # 建筑状态（从 minimap 统计 tower 对象数量，推掉后对象消失）
         minimap = data.get("minimap", {})
@@ -451,6 +460,7 @@ class AiAdvisor:
 
         lines = [
             f"等级: Lv{level}",
+            f"血量: {health_pct}%  蓝量: {mana_pct}%",
             f"KDA: {kills}/{deaths}/{assists}",
             f"补刀: {last_hits}/{denies}",
             f"GPM/XPM: {gpm}/{xpm}",
