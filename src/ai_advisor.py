@@ -394,6 +394,57 @@ class AiAdvisor:
         return "\n".join(parts)
 
     # ------------------------------------------------------------------
+    # 视野守卫提取
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_ward_info(data: Dict[str, Any]) -> str:
+        """从 minimap 提取双方视野守卫（假眼=obs, 真眼=invis），返回描述文本"""
+        minimap_data = data.get("minimap", {})
+        radiant_obs: List[str] = []
+        radiant_sen: List[str] = []
+        dire_obs: List[str] = []
+        dire_sen: List[str] = []
+
+        for obj in minimap_data.values():
+            unitname = obj.get("unitname", "")
+            team = obj.get("team")
+            xpos = obj.get("xpos", 0)
+            ypos = obj.get("ypos", 0)
+            landmark = AiAdvisor._nearest_landmark(xpos, ypos)
+
+            if unitname == "npc_dota_observer_wards":
+                entry = f"({xpos},{ypos})→{landmark}"
+                if team == 2:
+                    radiant_obs.append(entry)
+                elif team == 3:
+                    dire_obs.append(entry)
+            elif unitname == "npc_dota_sentry_wards":
+                entry = f"({xpos},{ypos})→{landmark}"
+                if team == 2:
+                    radiant_sen.append(entry)
+                elif team == 3:
+                    dire_sen.append(entry)
+
+        parts: List[str] = []
+        if radiant_obs or radiant_sen:
+            obs_str = f"假眼({len(radiant_obs)}): {', '.join(radiant_obs)}" if radiant_obs else "假眼: 无"
+            sen_str = f"真眼({len(radiant_sen)}): {', '.join(radiant_sen)}" if radiant_sen else "真眼: 无"
+            parts.append(f"天辉视野: {obs_str}; {sen_str}")
+        else:
+            parts.append("天辉视野: 未发现")
+
+        if dire_obs or dire_sen:
+            obs_str = f"假眼({len(dire_obs)}): {', '.join(dire_obs)}" if dire_obs else "假眼: 无"
+            sen_str = f"真眼({len(dire_sen)}): {', '.join(dire_sen)}" if dire_sen else "真眼: 无"
+            parts.append(f"夜魇视野: {obs_str}; {sen_str}")
+        else:
+            parts.append("夜魇视野: 未发现")
+
+        parts.append("(仅统计视野内可见的守卫)")
+        return "\n".join(parts)
+
+    # ------------------------------------------------------------------
     # 玩家状态提取
     # ------------------------------------------------------------------
 
@@ -423,7 +474,7 @@ class AiAdvisor:
             name = slot.get("name", "")
             if name and name != "empty":
                 short_name = name.replace("item_", "")
-                cd = slot.get("cooldown_time_remaining", 0) or 0
+                cd = slot.get("cooldown", 0) or 0
                 if cd > 0:
                     short_name += f"(cd:{cd:.0f}s)"
                 item_names.append(short_name)
@@ -435,7 +486,7 @@ class AiAdvisor:
             ab = abilities_data.get(ab_key, {})
             lv = ab.get("level", 0)
             name = ab.get("name", "")
-            cd = ab.get("cooldown_time_remaining", 0) or 0
+            cd = ab.get("cooldown", 0) or 0
             if name:
                 short = name.split(".")[-1] if "." in name else name
                 parts = short.split("_", 1)
@@ -528,6 +579,7 @@ class AiAdvisor:
 
         player_state = self._build_player_state(data)
         hero_positions = self._extract_hero_positions(data)
+        ward_info = self._extract_ward_info(data)
 
         # 附加上一次的战略分析，供 AI 参考（避免重复分析）
         last_analysis_part = ""
@@ -541,6 +593,9 @@ class AiAdvisor:
             f"\n"
             f"英雄位置:\n"
             f"{hero_positions}\n"
+            f"\n"
+            f"视野守卫:\n"
+            f"{ward_info}\n"
             f"\n"
             f"我的英雄状态:\n"
             f"{player_state}"
