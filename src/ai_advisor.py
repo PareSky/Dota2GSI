@@ -167,6 +167,8 @@ class AiAdvisor:
         self._last_scores: tuple = (-1, -1)  # 上一帧 (radiant_score, dire_score)
         self._score_change_time: float = -1  # 最近比分变化时的游戏时间，-1=无待处理
         self._last_query_time: float = -1    # 上次 AI 查询的游戏时间，用于 20s 全局冷却
+        self._last_frame_heroes: Dict[int, set] = {}  # 上帧 minimap 可见英雄（team→name集合）
+        self._recently_killed: Dict[int, List[str]] = {}  # 比分变化时刚死的英雄（team→中文名列表）
 
         os.makedirs(self._prompt_log_dir, exist_ok=True)
 
@@ -199,10 +201,23 @@ class AiAdvisor:
 
         # --- 检测比分变化 ---
         if self._last_scores != (-1, -1) and current_scores != self._last_scores:
+            # 比分变化瞬间：对比上帧英雄 vs 当前英雄，消失的视为刚死
+            current_heroes = self._extract_hero_names(data)
+            for team in (2, 3):
+                disappeared = self._last_frame_heroes.get(team, set()) - current_heroes.get(team, set())
+                for hname in disappeared:
+                    cn = hero_cn_name(hname)
+                    if cn not in self._recently_killed.get(team, []):
+                        self._recently_killed.setdefault(team, []).append(cn)
             if self._score_change_time > 0:
-                print(f"  [AI Advisor] 比分再次变化，重新计时 5 秒")
+                print(f"  [AI Advisor] 比分再次变化 {self._last_scores} → {current_scores}，"
+                      f"重新计时 5 秒")
             else:
-                print(f"  [AI Advisor] 检测到比分变化 {self._last_scores} → {current_scores}，5 秒后查询 AI")
+                killed_list = []
+                for names in self._recently_killed.values():
+                    killed_list.extend(names)
+                print(f"  [AI Advisor] 比分变化 {self._last_scores} → {current_scores}，"
+                      f"检测到死亡: {killed_list if killed_list else '未能识别'}，5 秒后查询 AI")
             self._score_change_time = clock_time
         self._last_scores = current_scores
 
@@ -225,6 +240,7 @@ class AiAdvisor:
         if not timer_trigger and not score_trigger:
             if self._last_bucket == -1 and current_bucket == 1 and clock_time > interval_seconds - 60:
                 print(f"  [AI Advisor] 将在 {interval_seconds//60} 分钟后首次查询 AI...")
+            self._last_frame_heroes = self._extract_hero_names(data)
             return []
 
         # --- 全局冷却检查 ---
@@ -232,9 +248,11 @@ class AiAdvisor:
             remaining = COOLDOWN - (clock_time - self._last_query_time)
             if score_trigger:
                 self._score_change_time = -1  # 清除待处理，避免下一帧重复提示
+                self._recently_killed = {}     # 同时清除死亡记录
                 print(f"  [AI Advisor] 比分触发但冷却中（剩余 {remaining:.0f}s），跳过")
             if timer_trigger:
                 self._last_bucket = current_bucket  # 推进桶，避免每帧重试
+            self._last_frame_heroes = self._extract_hero_names(data)
             return []
 
         # --- 执行查询 ---
@@ -251,12 +269,16 @@ class AiAdvisor:
         # 构建用户消息（固定前缀 + 可变数据）
         user_message = self._build_user_message(data)
 
+        # 死亡记录已消费，清除
+        self._recently_killed = {}
+
         # 打印提示词到控制台 + 写入日志
         self._log_prompt(user_message)
 
         # 调用 API
         result = self._call_api(user_message)
         if result is None:
+            self._last_frame_heroes = self._extract_hero_names(data)
             return []
 
         analysis, command = result
@@ -270,6 +292,7 @@ class AiAdvisor:
         self._log_advice(command, clock_time, analysis)
 
         now_ts = datetime.now().isoformat(timespec="seconds")
+        self._last_frame_heroes = self._extract_hero_names(data)
         return [AdvisorEvent(
             advice_text=command,
             analysis_text=analysis,
@@ -297,6 +320,8 @@ class AiAdvisor:
         self._last_scores = (-1, -1)
         self._score_change_time = -1
         self._last_query_time = -1
+        self._last_frame_heroes = {}
+        self._recently_killed = {}
 
     # ------------------------------------------------------------------
     # 阵容提取（跨帧累积）
@@ -366,8 +391,29 @@ class AiAdvisor:
         return best or "未知位置"
 
     @staticmethod
-    def _extract_hero_positions(data: Dict[str, Any]) -> str:
-        """从 minimap 提取所有英雄当前位置，返回描述文本"""
+    def _extract_hero_names(data: Dict[str, Any]) -> Dict[int, set]:
+        """从 minimap 提取可见英雄名，按队伍分组（team 2=天辉, 3=夜魇）。
+        每帧调用，轻量级，不含地标匹配。"""
+        result: Dict[int, set] = {2: set(), 3: set()}
+        minimap = data.get("minimap", {})
+        for obj in minimap.values():
+            image = obj.get("image", "")
+            if "herocircle" not in image and image != "minimap_enemyicon":
+                continue
+            team = obj.get("team")
+            if team not in (2, 3):
+                continue
+            name = obj.get("name") or obj.get("unitname", "")
+            if name and name.startswith("npc_dota_hero_"):
+                result[team].add(name)
+        return result
+
+    def _extract_hero_positions(self, data: Dict[str, Any],
+                                 recently_killed: Optional[Dict[int, List[str]]] = None) -> str:
+        """从 minimap 提取所有英雄当前位置，返回描述文本。
+
+        recently_killed: 比分变化瞬间识别出的死亡英雄 {team: [中文名, ...]}
+        在比分变化时已计算好，不依赖 5 秒后的 minimap 状态。"""
         minimap_data = data.get("minimap", {})
         player_team_name = data.get("player", {}).get("team_name", "")
         player_is_radiant = player_team_name == "radiant"
@@ -410,20 +456,28 @@ class AiAdvisor:
             elif team == 3:
                 dire_heroes.append(line)
 
-        # 根据玩家阵营决定先显示敌方还是友方
-        # 注意：minimap 只显示视野内的英雄，未列出 ≠ 死亡，可能只是没视野
+        # 构建注释行（recently_killed 在比分变化瞬间已计算好，直接使用）
+        notes: List[str] = []
+        if recently_killed:
+            dead_radiant = recently_killed.get(2, [])
+            dead_dire = recently_killed.get(3, [])
+            if dead_radiant:
+                notes.append(f"刚死亡(天辉): {', '.join(dead_radiant)}")
+            if dead_dire:
+                notes.append(f"刚死亡(夜魇): {', '.join(dead_dire)}")
+        else:
+            notes.append("(未列出的英雄可能不在视野内，不一定已死亡)")
+
         if player_is_radiant:
             parts = [
                 f"天辉({len(radiant_heroes)}人): {', '.join(radiant_heroes) if radiant_heroes else '未知'}",
                 f"夜魇({len(dire_heroes)}人): {', '.join(dire_heroes) if dire_heroes else '未知'}",
-                "(未列出的英雄可能不在视野内，不一定已死亡)",
-            ]
+            ] + notes
         else:
             parts = [
                 f"夜魇({len(dire_heroes)}人): {', '.join(dire_heroes) if dire_heroes else '未知'}",
                 f"天辉({len(radiant_heroes)}人): {', '.join(radiant_heroes) if radiant_heroes else '未知'}",
-                "(未列出的英雄可能不在视野内，不一定已死亡)",
-            ]
+            ] + notes
 
         return "\n".join(parts)
 
@@ -570,12 +624,14 @@ class AiAdvisor:
         dire_alive.sort(key=_tower_sort)
 
         radiant_tower_str = (
-            f"天辉({len(radiant_alive)}): {', '.join(radiant_alive)}"
-            if radiant_alive else "天辉: 未知"
+            f"天辉存活塔({len(radiant_alive)}): "
+            + ", ".join(f"天辉{n}" for n in radiant_alive)
+            if radiant_alive else "天辉塔: 无视野"
         )
         dire_tower_str = (
-            f"夜魇({len(dire_alive)}): {', '.join(dire_alive)}"
-            if dire_alive else "夜魇: 未知"
+            f"夜魇存活塔({len(dire_alive)}): "
+            + ", ".join(f"夜魇{n}" for n in dire_alive)
+            if dire_alive else "夜魇塔: 无视野"
         )
 
         lines = [
@@ -587,7 +643,8 @@ class AiAdvisor:
             f"金钱: {gold}",
             f"装备: {', '.join(item_names) if item_names else '无'}",
             f"技能: {' '.join(skill_levels)}",
-            f"存活塔: {radiant_tower_str} | {dire_tower_str}",
+            f"{radiant_tower_str}",
+            f"{dire_tower_str}",
         ]
         return "\n".join(lines)
 
@@ -647,7 +704,9 @@ class AiAdvisor:
         dire_score = map_info.get("dire_score", 0)
 
         player_state = self._build_player_state(data)
-        hero_positions = self._extract_hero_positions(data)
+        hero_positions = self._extract_hero_positions(
+            data, self._recently_killed if self._recently_killed else None
+        )
         ward_info = self._extract_ward_info(data)
 
         # 附加上一次的战略分析，供 AI 参考（避免重复分析）
@@ -682,7 +741,7 @@ class AiAdvisor:
         instruction = (
             "\n\n请根据以上所有信息，输出一个JSON对象，包含两个字段：\n"
             '1. "analysis": 80-150字的战略局势分析（阵容优劣势/克制关系/当前阶段/应该采取的策略方向）\n'
-            '2. "command": 1条15-30字的极简战术指令\n'
+            '2. "command": 1条15-30字的极简战术指令，不要与上一条重复\n'
             "只输出JSON本身，不要添加```json标记或任何其他文字。\n"
             "确保JSON合法可解析，analysis和command内的文本不要包含未转义的双引号。"
         )
