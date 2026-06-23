@@ -42,6 +42,40 @@ class AiAdvisor:
     # 需要提取的技能槽位
     ABILITY_SLOTS = ["ability0", "ability1", "ability2", "ability3"]
 
+    # 塔名映射：GSI buildings 内部名 → 中文简称
+    TOWER_NAME_MAP: Dict[str, str] = {
+        # 天辉（Radiant / goodguys）
+        "dota_goodguys_tower1_top": "上一塔",
+        "dota_goodguys_tower2_top": "上二塔",
+        "dota_goodguys_tower3_top": "上三塔",
+        "dota_goodguys_tower1_mid": "中一塔",
+        "dota_goodguys_tower2_mid": "中二塔",
+        "dota_goodguys_tower3_mid": "中三塔",
+        "dota_goodguys_tower1_bot": "下一塔",
+        "dota_goodguys_tower2_bot": "下二塔",
+        "dota_goodguys_tower3_bot": "下三塔",
+        "dota_goodguys_tower4": "基地塔",
+        # 夜魇（Dire / badguys）
+        "dota_badguys_tower1_top": "上一塔",
+        "dota_badguys_tower2_top": "上二塔",
+        "dota_badguys_tower3_top": "上三塔",
+        "dota_badguys_tower1_mid": "中一塔",
+        "dota_badguys_tower2_mid": "中二塔",
+        "dota_badguys_tower3_mid": "中三塔",
+        "dota_badguys_tower1_bot": "下一塔",
+        "dota_badguys_tower2_bot": "下二塔",
+        "dota_badguys_tower3_bot": "下三塔",
+        "dota_badguys_tower4": "基地塔",
+    }
+
+    # 塔排序键（按路、层级排列，与 TOWER_NAME_MAP 的值对应）
+    _TOWER_ORDER = [
+        "上一塔", "上二塔", "上三塔",
+        "中一塔", "中二塔", "中三塔",
+        "下一塔", "下二塔", "下三塔",
+        "基地塔",
+    ]
+
     # 地标坐标（来自 LANDMARKS.md，地图中心为 0,0）
     # 格式: (名称, x, y, 阵营)
     LANDMARKS: List[tuple] = [
@@ -76,8 +110,8 @@ class AiAdvisor:
         # === 野外 ===
         ("夜魇神秘商店", 4886, -1207, "dire"),
         ("天辉神秘商店", -5080, 1947, "radiant"),
-        ("夜魇莲花池", 7503, -4404, "dire"),
-        ("天辉莲花池", -7548, 4209, "radiant"),
+        # ("夜魇莲花池", 7503, -4404, "dire"),
+        # ("天辉莲花池", -7548, 4209, "radiant"),
         ("上路传送门", -6457, 7599, None),
         ("下路传送门", 6425, -7313, None),
         # === 肉山 ===
@@ -497,17 +531,52 @@ class AiAdvisor:
                 cd_str = f"(cd:{cd:.0f}s)" if cd > 0 else ""
                 skill_levels.append(f"技能{ab_key[-1]}:lv{lv}{cd_str}")
 
-        # 建筑状态（从 minimap 统计 tower 对象数量，推掉后对象消失）
+        # 建筑状态（从 minimap 识别具体存活塔，unitname 如 npc_dota_badguys_tower2_mid）
         minimap = data.get("minimap", {})
-        radiant_towers = 0
-        dire_towers = 0
+        radiant_alive: List[str] = []
+        dire_alive: List[str] = []
+
         for obj in minimap.values():
-            if "tower" in obj.get("image", ""):
-                team = obj.get("team")
-                if team == 2:
-                    radiant_towers += 1
-                elif team == 3:
-                    dire_towers += 1
+            if "tower" not in obj.get("image", ""):
+                continue
+            team = obj.get("team")
+            unitname = obj.get("unitname", "") or obj.get("name", "")
+            if not unitname:
+                continue
+
+            # 去掉 npc_ 前缀以匹配 TOWER_NAME_MAP
+            # 例如 npc_dota_goodguys_tower2_mid → dota_goodguys_tower2_mid
+            lookup_key = unitname
+            if unitname.startswith("npc_"):
+                lookup_key = unitname[len("npc_"):]
+
+            cn_name = AiAdvisor.TOWER_NAME_MAP.get(lookup_key)
+            if not cn_name:
+                continue
+
+            if team == 2 and cn_name not in radiant_alive:
+                radiant_alive.append(cn_name)
+            elif team == 3 and cn_name not in dire_alive:
+                dire_alive.append(cn_name)
+
+        # 按路/层级排序
+        def _tower_sort(name: str) -> int:
+            try:
+                return AiAdvisor._TOWER_ORDER.index(name)
+            except ValueError:
+                return 99
+
+        radiant_alive.sort(key=_tower_sort)
+        dire_alive.sort(key=_tower_sort)
+
+        radiant_tower_str = (
+            f"天辉({len(radiant_alive)}): {', '.join(radiant_alive)}"
+            if radiant_alive else "天辉: 未知"
+        )
+        dire_tower_str = (
+            f"夜魇({len(dire_alive)}): {', '.join(dire_alive)}"
+            if dire_alive else "夜魇: 未知"
+        )
 
         lines = [
             f"等级: Lv{level}",
@@ -518,7 +587,7 @@ class AiAdvisor:
             f"金钱: {gold}",
             f"装备: {', '.join(item_names) if item_names else '无'}",
             f"技能: {' '.join(skill_levels)}",
-            f"存活塔数: 天辉{radiant_towers} 夜魇{dire_towers}",
+            f"存活塔: {radiant_tower_str} | {dire_tower_str}",
         ]
         return "\n".join(lines)
 
