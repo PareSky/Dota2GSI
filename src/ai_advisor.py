@@ -100,11 +100,11 @@ class AiAdvisor:
         if clock_time < 0:
             return []
 
+        self._extractor.accumulate_lineups(data)
         decision = self._trigger.evaluate(data)
         if not decision.should_query:
             return []
 
-        self._extractor.accumulate_lineups(data)
         user_message = self._prompt.build_user_message(
             data,
             decision.recently_killed or None,
