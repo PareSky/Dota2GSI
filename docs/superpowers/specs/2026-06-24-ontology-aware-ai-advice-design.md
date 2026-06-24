@@ -33,7 +33,7 @@
 - `indexes.json`：英雄、物品、关系和特征索引。
 - `item_profiles.json` 与 `skills.json`：物品和技能的详细机制证据。
 
-第一版只依赖 `hero_profiles.json`、`relation_edges.json` 和 `indexes.json`。其余文件保留为后续精细化能力，不在第一版扩大范围。
+第一版依赖 `hero_profiles.json`、`item_profiles.json`、`relation_edges.json` 和 `indexes.json`。`item_profiles.json` 用于把 GSI 的 `item_*` 内部名称映射为本体中的中文物品名，从而排除玩家已经拥有的装备。其余文件保留为后续精细化能力，不在第一版扩大范围。
 
 ## 方案选择
 
@@ -70,6 +70,7 @@ class OntologyRepository:
 - 使用 `resource_path()` 解析源码和 PyInstaller 环境中的路径。
 - 加载时验证顶层 JSON 类型和必要字段。
 - 根据 `indexes.json` 快速定位英雄画像。
+- 根据 `item_profiles.json` 建立物品内部名到中文名的映射。
 - 根据 `edges_by_target` 或加载时建立的内存索引查询指向敌方英雄的 `counter` 关系。
 - 数据只加载一次，整局查询复用内存结果。
 - 加载失败后记录一次警告并进入不可用状态，不在每次建议时重复报错。
