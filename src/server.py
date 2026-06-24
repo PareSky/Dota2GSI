@@ -7,6 +7,7 @@ Dota 2 GSI HTTP 服务器
 import sys
 import os
 import logging
+import multiprocessing
 
 # 关闭 Flask/Werkzeug 访问日志 (127.0.0.1 - - POST / HTTP/1.1 200 -)
 log = logging.getLogger('werkzeug')
@@ -103,4 +104,5 @@ def main():
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

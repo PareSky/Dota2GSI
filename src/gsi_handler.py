@@ -7,20 +7,26 @@ GSI 数据处理模块
 
 import json
 import os
-import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 from vision_tracker import VisionTracker, VisionEvent
 from tts import hero_cn_name, speak
 from game_timer import GameTimer, TimerEvent
-from ai_advisor import AiAdvisor, AdvisorEvent
+from ai_advisor import AdvisorEvent
+from ai_worker import AiAdvisorWorker
+from role_selector import RoleSelector
 
 
 class GSIHandler:
     """处理 Dota 2 GSI 推送的每一帧数据"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        ai_worker: Optional[AiAdvisorWorker] = None,
+        role_selector: Optional[RoleSelector] = None,
+    ):
         log_cfg = config.get("logging", {})
         self.log_dir: str = log_cfg.get("log_dir", "./logs")
         self.console_pretty: bool = log_cfg.get("console_pretty_print", True)
@@ -38,7 +44,14 @@ class GSIHandler:
         # AI 教练
         advisor_cfg = config.get("ai_advisor", {})
         self.advisor_enabled: bool = advisor_cfg.get("enabled", False)
-        self._ai_advisor = AiAdvisor(advisor_cfg) if self.advisor_enabled else None
+        self._ai_worker = None
+        self._role_selector = None
+        if self.advisor_enabled:
+            self._ai_worker = ai_worker or AiAdvisorWorker(
+                config=advisor_cfg,
+                on_event=self._on_advisor_event,
+            )
+            self._role_selector = role_selector or RoleSelector()
 
         self._session_started: bool = False
         self._session_file_path: Optional[str] = None
@@ -85,11 +98,12 @@ class GSIHandler:
                 for te in timer_events:
                     self._on_timer_event(te)
 
-        # AI 教练建议
-        if self._ai_advisor:
-            advisor_events = self._ai_advisor.update(data)
-            for evt in advisor_events:
-                self._on_advisor_event(evt)
+        # AI 教练建议：仅提交最新帧，网络请求在后台线程中执行
+        if self._ai_worker:
+            role = self._role_selector.poll_result() if self._role_selector else None
+            if role:
+                self._ai_worker.set_role(role)
+            self._ai_worker.submit(data)
 
         # 昼夜检测
         daytime = data.get("map", {}).get("daytime")
@@ -123,8 +137,8 @@ class GSIHandler:
             self._vision_tracker.reset()
         if self._game_timer:
             self._game_timer.reset()
-        if self._ai_advisor:
-            self._ai_advisor.reset()
+        if self._ai_worker:
+            self._ai_worker.reset()
         self._last_daytime = None
         self._last_write_time = -1
         self._last_game_state = "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
@@ -133,70 +147,9 @@ class GSIHandler:
         print(f"🆕 新游戏会话: {filename}")
         print(f"{'='*60}\n")
 
-        # 弹出分路选择对话框
-        if self._ai_advisor:
-            role = self._show_role_dialog()
-            if role:
-                self._ai_advisor.set_role(role)
-
-    # ------------------------------------------------------------------
-    # 分路选择对话框
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _show_role_dialog() -> str:
-        """弹出分路选择对话框，阻塞等待用户选择，返回分路编号（"1"-"5"）或空字符串"""
-        import tkinter as tk
-
-        result: str = ""
-
-        def choose(role: str) -> None:
-            nonlocal result
-            result = role
-            root.destroy()
-
-        root = tk.Tk()
-        root.title("Dota 2 GSI - 选择分路")
-        root.resizable(False, False)
-        root.configure(bg="#1e1e2e")
-
-        # 标题
-        tk.Label(
-            root, text="选择你的分路",
-            font=("Microsoft YaHei", 14, "bold"),
-            fg="#cdd6f4", bg="#1e1e2e",
-        ).pack(pady=(15, 12))
-
-        # 一行排开 5 个按钮
-        btn_frame = tk.Frame(root, bg="#1e1e2e")
-        btn_frame.pack(pady=(0, 15))
-
-        roles = [
-            ("1号位\n(大哥)",      "#f38ba8", "1"),
-            ("2号位\n(中单)",      "#fab387", "2"),
-            ("3号位\n(劣势路)",    "#a6e3a1", "3"),
-            ("4号位\n(劣势路辅助)", "#89b4fa", "4"),
-            ("5号位\n(优势路辅助)", "#cba6f7", "5"),
-        ]
-
-        for label, color, role_id in roles:
-            tk.Button(
-                btn_frame, text=label,
-                font=("Microsoft YaHei", 10),
-                width=12, height=3,
-                bg=color, fg="#1e1e2e", activebackground=color,
-                command=lambda r=role_id: choose(r),
-            ).pack(side=tk.LEFT, padx=3)
-
-        root.update_idletasks()
-        root.geometry(f"{root.winfo_reqwidth()}x{root.winfo_reqheight()}")
-
-        # 置顶窗口
-        root.attributes("-topmost", True)
-        root.focus_force()
-
-        root.mainloop()
-        return result
+        # 分路窗口在独立进程中运行，不阻塞当前 GSI 请求
+        if self._role_selector:
+            self._role_selector.request_selection()
 
     # ------------------------------------------------------------------
     # 控制台输出
