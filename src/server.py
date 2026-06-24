@@ -26,6 +26,7 @@ import yaml
 from flask import Flask, request, jsonify
 
 from gsi_handler import GSIHandler
+from resource_utils import resource_path
 
 app = Flask(__name__)
 handler: GSIHandler = None  # 由 main() 初始化
@@ -67,7 +68,7 @@ def main():
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     else:
-        config_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+        config_path = resource_path("config.yaml")
     config_path = os.path.abspath(config_path)
 
     config = load_config(config_path)

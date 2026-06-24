@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from resource_utils import resource_path
 from tts import hero_cn_name
 
 
@@ -132,10 +133,9 @@ class AiAdvisor:
         # System prompt：优先从文件加载，否则用 config 中的 inline 文本
         system_prompt_file = config.get("system_prompt_file", "")
         if system_prompt_file:
-            # 解析相对路径：相对于项目根目录（src/../）
+            # 相对路径统一相对于源码项目根目录或 PyInstaller 解压目录
             if not os.path.isabs(system_prompt_file):
-                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                system_prompt_file = os.path.join(project_root, system_prompt_file)
+                system_prompt_file = resource_path(system_prompt_file)
             if os.path.exists(system_prompt_file):
                 with open(system_prompt_file, "r", encoding="utf-8") as f:
                     self._system_prompt: str = f.read()

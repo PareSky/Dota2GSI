@@ -5,7 +5,11 @@ a = Analysis(
     ['src\\server.py'],
     pathex=['src'],
     binaries=[],
-    datas=[('src/speak.ps1', 'src'), ('config.yaml', '.')],
+    datas=[
+        ('src/speak.ps1', 'src'),
+        ('config.yaml', '.'),
+        ('AIPromt.md', '.'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

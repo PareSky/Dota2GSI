@@ -7,9 +7,10 @@ Windows TTS 语音模块
 
 import subprocess
 import sys
-import os
 import queue
 import threading
+
+from resource_utils import resource_path
 
 
 # ==========================================================================
@@ -218,12 +219,7 @@ class SpeechQueue:
 
     def _worker(self) -> None:
         """后台线程：逐条取出并同步朗读"""
-        if getattr(sys, "frozen", False):
-            # PyInstaller 打包后，资源在 sys._MEIPASS
-            ps1_path = os.path.join(sys._MEIPASS, "src", "speak.ps1")
-        else:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            ps1_path = os.path.join(script_dir, "speak.ps1")
+        ps1_path = resource_path("src", "speak.ps1")
 
         while self._running:
             text = self._queue.get()
