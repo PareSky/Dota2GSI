@@ -122,6 +122,11 @@ class VisionTracker:
         # 进入视野: 当前有, 上一帧没有 (包括从 pending 中恢复的)
         entered = curr_enemy_names - prev_enemy_names
         for name in entered:
+            # 在离开确认期内重新出现，只取消 pending，不重复报告进入视野
+            if name in self._pending_leave:
+                self._pending_leave.pop(name)
+                continue
+
             h = current_enemies[name]
             events.append(VisionEvent(
                 event_type="ENTERED",
@@ -131,8 +136,6 @@ class VisionTracker:
                 game_time=game_time,
                 timestamp=now_ts,
             ))
-            # 如果在 pending 中，取消 pending（又回来了）
-            self._pending_leave.pop(name, None)
 
         # 从视野消失: 上一帧有, 当前没有 → 判断是死亡还是离开视野
         left = prev_enemy_names - curr_enemy_names

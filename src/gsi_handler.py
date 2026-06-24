@@ -92,9 +92,9 @@ class GSIHandler:
 
         # 资源计时器（死亡时不播报）
         if self._game_timer:
-            timer_events = self._game_timer.update(game_time)
             hero_alive = data.get("hero", {}).get("alive", True)
             if hero_alive:
+                timer_events = self._game_timer.update(game_time)
                 for te in timer_events:
                     self._on_timer_event(te)
 
