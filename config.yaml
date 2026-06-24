@@ -36,3 +36,11 @@ ai_advisor:
   system_prompt: "你是一个专业的 Dota 2 教练。直接给出建议，不要解释。"
   # 提示词日志目录
   prompt_log_dir: "./logs"
+  # Dota 2 机制本体，用于动态补充敌方特性与反制候选
+  ontology:
+    enabled: true
+    path: "./Dota2MechanismOntology"
+    min_counter_strength: 70
+    max_traits_per_hero: 3
+    max_counters_per_hero: 2
+    max_context_chars: 1800

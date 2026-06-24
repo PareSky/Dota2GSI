@@ -10,6 +10,7 @@
 - 提前 15 秒提醒神符、莲花、经验符、魔方和魔晶刷新。
 - 使用 Windows SAPI 播放中文 TTS。
 - 异步调用 DeepSeek AI 教练，不阻塞 GSI HTTP 请求。
+- AI 教练动态读取机制本体，按敌方阵容、分路、阶段和已有装备补充反制候选。
 - 新局开始时弹出分路选择窗口。
 
 ## 安装与运行
@@ -64,6 +65,12 @@ C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestat
 | `ai_advisor.system_prompt_file` | 系统提示词文件 | `./AIPromt.md` |
 | `ai_advisor.system_prompt` | 提示词文件不可用时的后备提示词 | 见配置文件 |
 | `ai_advisor.prompt_log_dir` | AI 提示词及建议日志目录 | `./logs` |
+| `ai_advisor.ontology.enabled` | 是否启用敌方机制参考 | `true` |
+| `ai_advisor.ontology.path` | 机制本体目录 | `./Dota2MechanismOntology` |
+| `ai_advisor.ontology.min_counter_strength` | 反制关系最低强度 | `70` |
+| `ai_advisor.ontology.max_traits_per_hero` | 每名敌人最多输出的特性数 | `3` |
+| `ai_advisor.ontology.max_counters_per_hero` | 每名敌人最多输出的反制数 | `2` |
+| `ai_advisor.ontology.max_context_chars` | 机制参考最大字符数 | `1800` |
 
 `logging.session_file: true` 时，每局创建一个 `gsi_session_<时间>.jsonl`，游戏时间每经过至少 60 秒写入一次。
 
@@ -124,4 +131,5 @@ Dota2GSI/
 dist\Dota2GSI.exe
 ```
 
-EXE 会打包 `config.yaml`、`AIPromt.md` 和 `src/speak.ps1`。
+EXE 会打包 `config.yaml`、`AIPromt.md`、`src/speak.ps1` 和
+`Dota2MechanismOntology` 机制本体目录。

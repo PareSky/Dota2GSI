@@ -116,6 +116,23 @@ class StateExtractor:
                 f"夜魇={self.team_lineups['dire']}"
             )
 
+    def get_enemy_lineup(self, player_team_name: str) -> List[str]:
+        if player_team_name == "radiant":
+            return list(self.team_lineups.get("dire", []))
+        if player_team_name == "dire":
+            return list(self.team_lineups.get("radiant", []))
+        return []
+
+    @classmethod
+    def extract_owned_item_ids(cls, data: Dict[str, Any]) -> set:
+        result = set()
+        items = data.get("items", {})
+        for slot_key in cls.ITEM_SLOTS:
+            name = items.get(slot_key, {}).get("name", "")
+            if name and name != "empty":
+                result.add(name.removeprefix("item_"))
+        return result
+
     @classmethod
     def nearest_landmark(cls, xpos: float, ypos: float) -> str:
         best = None

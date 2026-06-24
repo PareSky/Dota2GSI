@@ -5,6 +5,7 @@ import sys
 from typing import Any, Dict, List, Optional
 
 from advisor.extractor import StateExtractor
+from advisor.ontology import EnemyKnowledgeBuilder
 from resource_utils import resource_path
 from tts import hero_cn_name
 
@@ -14,8 +15,10 @@ class PromptBuilder:
         self,
         config: Dict[str, Any],
         extractor: StateExtractor,
+        knowledge_builder: Optional[EnemyKnowledgeBuilder] = None,
     ):
         self._extractor = extractor
+        self._knowledge_builder = knowledge_builder
         self.system_prompt = self._load_system_prompt(config)
         self._fixed_prefix: Optional[str] = None
         self._advice_history: List[tuple] = []
@@ -139,16 +142,36 @@ class PromptBuilder:
         data: Dict[str, Any],
         recently_killed: Optional[Dict[int, List[str]]] = None,
     ) -> str:
+        knowledge = ""
+        if self._knowledge_builder is not None:
+            player = data.get("player", {})
+            hero = data.get("hero", {})
+            knowledge = self._knowledge_builder.build(
+                enemy_heroes=self._extractor.get_enemy_lineup(
+                    player.get("team_name", "")
+                ),
+                player_hero=hero_cn_name(
+                    hero.get("name", player.get("hero_name", ""))
+                ),
+                role=self._role,
+                owned_item_ids=self._extractor.extract_owned_item_ids(data),
+                game_time=data.get("map", {}).get("clock_time", 0),
+            )
+            if knowledge:
+                knowledge = f"\n{knowledge}\n"
         instruction = (
             "\n\n请根据以上所有信息，输出一个JSON对象，包含三个字段：\n"
             '1. "analysis": 80-150字的战略局势分析（阵容优劣势/克制关系/当前阶段/应该采取的策略方向）\n'
             '2. "command": 1条15-30字的极简战术指令，不要与上一条战术指令重复\n'
             '3. "item": 5-10字的出装建议（针对对方关键英雄的克制装备或补全阵容短板）\n'
+            "机制参考仅是候选，需结合局势、英雄、分路和已有装备，"
+            "不要重复推荐已购装备。\n"
             "只输出JSON本身，不要添加```json标记或任何其他文字。\n"
             "确保JSON合法可解析，analysis、command和item内的文本不要包含未转义的双引号。"
         )
         return (
             self.get_fixed_prefix(data)
+            + knowledge
             + self.build_history_section()
             + self.build_variable_part(data, recently_killed)
             + instruction

@@ -12,8 +12,10 @@ from typing import Any, Dict, List, Optional
 from advisor.client import AdvisorClient
 from advisor.extractor import StateExtractor
 from advisor.logging import AdvisorLogger
+from advisor.ontology import EnemyKnowledgeBuilder, OntologyRepository
 from advisor.prompt import PromptBuilder
 from advisor.trigger import TriggerController
+from resource_utils import resource_path
 
 
 @dataclass
@@ -41,7 +43,40 @@ class AiAdvisor:
         log_dir = config.get("prompt_log_dir", "./logs")
 
         self._extractor = StateExtractor()
-        self._prompt = PromptBuilder(config, self._extractor)
+        ontology_config = config.get("ontology", {})
+        knowledge_builder = None
+        if ontology_config.get("enabled", True):
+            ontology_path = ontology_config.get(
+                "path",
+                "./Dota2MechanismOntology",
+            )
+            if not os.path.isabs(ontology_path):
+                ontology_path = resource_path(ontology_path)
+            repository = OntologyRepository(ontology_path)
+            knowledge_builder = EnemyKnowledgeBuilder(
+                repository=repository,
+                min_counter_strength=ontology_config.get(
+                    "min_counter_strength",
+                    70,
+                ),
+                max_traits_per_hero=ontology_config.get(
+                    "max_traits_per_hero",
+                    3,
+                ),
+                max_counters_per_hero=ontology_config.get(
+                    "max_counters_per_hero",
+                    2,
+                ),
+                max_context_chars=ontology_config.get(
+                    "max_context_chars",
+                    1800,
+                ),
+            )
+        self._prompt = PromptBuilder(
+            config,
+            self._extractor,
+            knowledge_builder,
+        )
         self._trigger = TriggerController(interval_minutes, self._extractor)
         self._client = AdvisorClient(
             api_key=config.get("api_key", "")
