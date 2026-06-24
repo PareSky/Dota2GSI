@@ -6,21 +6,13 @@ server:
 logging:
   # 日志输出目录
   log_dir: "./logs"
-  # 是否在控制台打印 JSON (方便实时查看)
-  console_pretty_print: true
-  # 控制台最大打印深度 (防止刷屏, 0 = 不限制)
-  console_max_depth: 3
-  # 每个游戏会话一个日志文件 (按启动时间命名)
+  # 是否为每局游戏创建原始 GSI JSONL 日志
   session_file: true
-  # 是否记录原始 JSON 行 (一行一条记录)
-  json_lines: true
 
 # 视野追踪（基于 minimap 数据对比）
 vision:
   # 是否启用敌方视野检测
   enabled: true
-  # 视野事件单独日志
-  event_log_file: "./logs/vision_events.jsonl"
 
 # AI 教练建议（DeepSeek API）
 ai_advisor:

@@ -5,3 +5,4 @@ logs/
 venv/
 .claude/settings.local.json
 tests
+/docs/superpowers

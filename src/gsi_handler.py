@@ -1,8 +1,8 @@
 """
 GSI 数据处理模块
 - 接收并解析 Dota 2 推送的 JSON 数据
-- 按游戏时间分流：新游戏 → 新日志文件
-- 支持控制台美化输出 + 文件结构化日志
+- 检测新游戏并管理会话状态
+- 按配置写入结构化日志
 """
 
 import json
@@ -29,15 +29,11 @@ class GSIHandler:
     ):
         log_cfg = config.get("logging", {})
         self.log_dir: str = log_cfg.get("log_dir", "./logs")
-        self.console_pretty: bool = log_cfg.get("console_pretty_print", True)
-        self.console_max_depth: int = log_cfg.get("console_max_depth", 0)
         self.session_file: bool = log_cfg.get("session_file", True)
-        self.json_lines: bool = log_cfg.get("json_lines", True)
 
         # 视野追踪
         vision_cfg = config.get("vision", {})
         self.vision_enabled: bool = vision_cfg.get("enabled", True)
-        self.vision_event_log: str = vision_cfg.get("event_log_file", "./logs/vision_events.jsonl")
         self._vision_tracker = VisionTracker() if self.vision_enabled else None
         self._game_timer = GameTimer()
 
@@ -53,7 +49,6 @@ class GSIHandler:
             )
             self._role_selector = role_selector or RoleSelector()
 
-        self._session_started: bool = False
         self._session_file_path: Optional[str] = None
         self._last_daytime: Optional[bool] = None  # 上一帧是否为白天
         self._last_write_time: float = -1  # 上次写入日志的游戏时间
@@ -112,10 +107,6 @@ class GSIHandler:
                 self._on_night_fall()
             self._last_daytime = daytime
 
-        # 控制台输出
-        if self.console_pretty:
-            self._print_to_console(data)
-
         # 文件日志
         self._write_to_file(data)
 
@@ -129,8 +120,11 @@ class GSIHandler:
         """开始新的日志会话"""
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"gsi_session_{ts}.jsonl"
-        self._session_file_path = os.path.join(self.log_dir, filename)
-        self._session_started = True
+        self._session_file_path = (
+            os.path.join(self.log_dir, filename)
+            if self.session_file
+            else None
+        )
 
         # 新游戏重置视野追踪和计时器
         if self._vision_tracker:
@@ -152,88 +146,12 @@ class GSIHandler:
             self._role_selector.request_selection()
 
     # ------------------------------------------------------------------
-    # 控制台输出
-    # ------------------------------------------------------------------
-
-    def _print_to_console(self, data: Dict[str, Any]) -> None:
-        """美化打印到控制台（仅摘要行，完整 JSON 见日志文件）"""
-        now = datetime.now().strftime("%H:%M:%S")
-        summary = self._build_summary(data)
-        # print(f"[{now}] {summary}")
-
-    def _build_summary(self, data: Dict[str, Any]) -> str:
-        """构建一行摘要信息"""
-        parts: list[str] = []
-
-        # 游戏时间
-        map_info = data.get("map", {})
-        gt = map_info.get("clock_time", None)
-        if gt is not None:
-            mins = int(gt // 60)
-            secs = int(gt % 60)
-            parts.append(f"⏱ {mins:02d}:{secs:02d}")
-
-        # 玩家信息
-        player = data.get("player", {})
-        hero = data.get("hero", {})
-        hero_name = hero.get("name", player.get("hero_name", ""))
-        if hero_name:
-            parts.append(f"🦸 {hero_name}")
-
-        # KDA
-        kills = player.get("kills", 0)
-        deaths = player.get("deaths", 0)
-        assists = player.get("assists", 0)
-        parts.append(f"⚔ {kills}/{deaths}/{assists}")
-
-        # 等级
-        lvl = hero.get("level", None)
-        if lvl is not None:
-            parts.append(f"⬆ Lv.{lvl}")
-
-        # 金钱
-        gold = player.get("gold", None)
-        if gold is not None:
-            parts.append(f"💰 {gold}")
-
-        # 比分
-        radiant_score = map_info.get("radiant_score", 0)
-        dire_score = map_info.get("dire_score", 0)
-        parts.append(f"🏆 {radiant_score}-{dire_score}")
-
-        # 建筑状态
-        buildings = data.get("buildings", {})
-        if buildings:
-            bld = self._buildings_summary(buildings)
-            if bld:
-                parts.append(f"🏗 {bld}")
-
-        # 地图状态
-        game_state = map_info.get("game_state", "")
-        if game_state:
-            parts.append(f"📊 {game_state}")
-
-        return " | ".join(parts)
-
-    @staticmethod
-    def _buildings_summary(buildings: dict) -> str:
-        """建筑状态摘要：统计双方存活塔数"""
-        parts = []
-        for team in ("radiant", "dire"):
-            team_b = buildings.get(team, {})
-            towers = team_b.get("towers", {})
-            if towers:
-                alive = sum(1 for t in towers.values() if t.get("health", 0) > 0)
-                parts.append(f"{team[:1].upper()}{alive}")
-        return "/".join(parts) if parts else ""
-
-    # ------------------------------------------------------------------
     # 文件日志
     # ------------------------------------------------------------------
 
     def _write_to_file(self, data: Dict[str, Any]) -> None:
         """写入日志文件（每分钟最多一次）"""
-        if not self.json_lines or not self._session_file_path:
+        if not self._session_file_path:
             return
         game_time = data.get("map", {}).get("clock_time", -1)
         if game_time < 0:
@@ -307,18 +225,3 @@ class GSIHandler:
     def _extract_game_time(data: Dict[str, Any]) -> float:
         """从数据中提取游戏时间（秒）"""
         return data.get("map", {}).get("clock_time", -1.0)
-
-    @staticmethod
-    def _truncate_depth(obj: Any, max_depth: int, current: int = 0) -> Any:
-        """限制嵌套深度，防止刷屏"""
-        if max_depth <= 0:
-            return obj
-        if isinstance(obj, dict):
-            if current >= max_depth:
-                return f"<dict:{len(obj)} keys>"
-            return {k: GSIHandler._truncate_depth(v, max_depth, current + 1) for k, v in obj.items()}
-        if isinstance(obj, list):
-            if current >= max_depth:
-                return f"<list:{len(obj)} items>"
-            return [GSIHandler._truncate_depth(v, max_depth, current + 1) for v in obj[:5]]  # 只展示前5项
-        return obj
