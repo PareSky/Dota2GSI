@@ -94,8 +94,14 @@ Dota2GSI/
 │   ├── gsi_handler.py     # GSI 编排与日志管理
 │   ├── vision_tracker.py  # 敌方视野状态机
 │   ├── game_timer.py      # 资源刷新计时器
-│   ├── ai_advisor.py      # AI 状态提取与 API 调用
+│   ├── ai_advisor.py      # AI 教练兼容门面与流程编排
 │   ├── ai_worker.py       # AI 后台线程
+│   ├── advisor/
+│   │   ├── trigger.py     # 定时、比分变化与冷却状态机
+│   │   ├── extractor.py   # GSI 状态与地图信息提取
+│   │   ├── prompt.py      # 系统提示词和用户消息构建
+│   │   ├── client.py      # DeepSeek/OpenAI 兼容 API
+│   │   └── logging.py     # 提示词与建议 JSONL 日志
 │   ├── role_selector.py   # 独立进程分路窗口
 │   ├── tts.py             # TTS 队列与英雄名映射
 │   ├── speak.ps1          # Windows SAPI 脚本
