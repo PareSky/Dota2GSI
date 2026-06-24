@@ -210,7 +210,10 @@ class GSIHandler:
         # if event.analysis_text:
         #     print(f"  📊 {event.analysis_text}")
         if event.advice_text:
-            speak(event.advice_text)
+            text = event.advice_text
+            if event.item_text:
+                text += f"。出装建议：{event.item_text}"
+            speak(text)
 
     def _on_night_fall(self) -> None:
         """进入夜晚：控制台 + 语音"""

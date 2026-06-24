@@ -140,11 +140,12 @@ class PromptBuilder:
         recently_killed: Optional[Dict[int, List[str]]] = None,
     ) -> str:
         instruction = (
-            "\n\n请根据以上所有信息，输出一个JSON对象，包含两个字段：\n"
+            "\n\n请根据以上所有信息，输出一个JSON对象，包含三个字段：\n"
             '1. "analysis": 80-150字的战略局势分析（阵容优劣势/克制关系/当前阶段/应该采取的策略方向）\n'
-            '2. "command": 1条15-30字的极简战术指令，不要与上一条重复\n'
+            '2. "command": 1条15-30字的极简战术指令，不要与上一条战术指令重复\n'
+            '3. "item": 5-10字的出装建议（针对对方关键英雄的克制装备或补全阵容短板）\n'
             "只输出JSON本身，不要添加```json标记或任何其他文字。\n"
-            "确保JSON合法可解析，analysis和command内的文本不要包含未转义的双引号。"
+            "确保JSON合法可解析，analysis、command和item内的文本不要包含未转义的双引号。"
         )
         return (
             self.get_fixed_prefix(data)

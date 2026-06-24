@@ -26,7 +26,7 @@ class AdvisorClient:
         self,
         system_prompt: str,
         user_message: str,
-    ) -> Optional[tuple[str, str]]:
+    ) -> Optional[tuple[str, str, str]]:
         if not self._api_key:
             if not self._warned_no_key:
                 print(
@@ -78,19 +78,21 @@ class AdvisorClient:
                     parsed = json.loads(result)
                     analysis = parsed.get("analysis", "")
                     command = parsed.get("command", "")
+                    item = parsed.get("item", "")
                     if not command:
                         command = analysis
                         analysis = ""
                     print(f"  🤖 AI 战略分析: {analysis}")
                     print(f"  🤖 AI 战术指令: {command}")
-                    return analysis, command
+                    print(f"  🤖 AI 出装建议: {item}")
+                    return analysis, command, item
                 except json.JSONDecodeError:
                     print(
                         "  [AI Advisor] JSON解析失败，将全文作为指令",
                         file=sys.stderr,
                     )
                     print(f"  🤖 AI 回复: {result}")
-                    return "", result
+                    return "", result, ""
 
             print(
                 f"  [AI Advisor] API 返回为空，完整响应: {msg}",
