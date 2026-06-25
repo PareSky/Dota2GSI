@@ -25,6 +25,13 @@ python src/server.py path/to/config.yaml
 
 There are no tests or linters configured in this project.
 
+## Design and plan documents
+
+- Design specifications and implementation plans may be generated under `docs/` for local use.
+- Do not commit files under `docs/` to Git.
+- Do not use `git add -f` or any other method to bypass `.gitignore` for these documents.
+- If a workflow or skill normally requires committing a design or plan document, this repository rule takes precedence: keep the document local and untracked.
+
 ## Architecture
 
 ```
