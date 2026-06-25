@@ -25,6 +25,7 @@ class AdvisorEvent:
     item_text: str
     game_time: float
     timestamp: str
+    speech_level: str = "brief"
 
     def __str__(self) -> str:
         return (
@@ -115,7 +116,7 @@ class AiAdvisor:
         if result is None:
             return []
 
-        analysis, command, item = result
+        analysis, command, item, speech_level = result
         self._prompt.record_advice(clock_time, command, analysis)
         self._log_advice(command, clock_time, analysis)
         return [
@@ -125,6 +126,7 @@ class AiAdvisor:
                 item_text=item,
                 game_time=clock_time,
                 timestamp=datetime.now().isoformat(timespec="seconds"),
+                speech_level=speech_level,
             )
         ]
 
@@ -178,7 +180,7 @@ class AiAdvisor:
     def _call_api(
         self,
         user_message: str,
-    ) -> Optional[tuple[str, str, str]]:
+    ) -> Optional[tuple[str, str, str, str]]:
         return self._client.complete(
             self._prompt.system_prompt,
             user_message,

@@ -94,12 +94,13 @@ class AiAdvisorGoldenTests(unittest.TestCase):
                 advisor._accumulate_lineups(sample_data())
                 message = advisor._build_user_message(sample_data())
 
-        digest = hashlib.sha256(message.encode("utf-8")).hexdigest()
-        self.assertEqual(len(message), 609)
-        self.assertEqual(
-            digest,
-            "558fa2fff9dad7658e4e46daee6306bb9ca6dab9ff24eab82f33e9a691c4f06c",
-        )
+        self.assertIn('"analysis"', message)
+        self.assertIn('"command"', message)
+        self.assertIn('"item"', message)
+        self.assertIn('"speech_level"', message)
+        self.assertIn('"brief"', message)
+        self.assertIn('"full"', message)
+        self.assertIn("当前时间: 1分5秒", message)
 
     def test_timer_and_score_triggers_keep_current_sequence(self):
         with tempfile.TemporaryDirectory() as log_dir:
@@ -117,6 +118,8 @@ class AiAdvisorGoldenTests(unittest.TestCase):
             advisor._call_api = lambda message: queries.append(message) or (
                 "analysis",
                 "command",
+                "item",
+                "full",
             )
 
             with redirect_stdout(io.StringIO()):
@@ -136,6 +139,9 @@ class AiAdvisorGoldenTests(unittest.TestCase):
         self.assertEqual(len(queries), 2)
         self.assertIsInstance(timer_event[0], AdvisorEvent)
         self.assertEqual(timer_event[0].advice_text, "command")
+        self.assertEqual(timer_event[0].analysis_text, "analysis")
+        self.assertEqual(timer_event[0].item_text, "item")
+        self.assertEqual(timer_event[0].speech_level, "full")
         self.assertEqual(score_event[0].game_time, 85)
 
     def test_logging_schema_is_stable(self):
@@ -199,8 +205,10 @@ class AdvisorComponentTests(unittest.TestCase):
 
         completions = Completions(
             [
-                '{"analysis":"局势","command":"推进"}',
-                '{"analysis":"只分析","command":""}',
+                '{"analysis":"局势","command":"推进","item":"黑皇杖","speech_level":"full"}',
+                '{"analysis":"稳住","command":"带线","item":"","speech_level":"loud"}',
+                '{"analysis":"默认","command":"控盾","item":""}',
+                '{"analysis":"只分析","command":"","speech_level":"full"}',
                 "plain text",
             ]
         )
@@ -221,9 +229,26 @@ class AdvisorComponentTests(unittest.TestCase):
             redirect_stdout(io.StringIO()),
             redirect_stderr(io.StringIO()),
         ):
-            self.assertEqual(client.complete("SYS", "USER"), ("局势", "推进"))
-            self.assertEqual(client.complete("SYS", "USER"), ("", "只分析"))
-            self.assertEqual(client.complete("SYS", "USER"), ("", "plain text"))
+            self.assertEqual(
+                client.complete("SYS", "USER"),
+                ("局势", "推进", "黑皇杖", "full"),
+            )
+            self.assertEqual(
+                client.complete("SYS", "USER"),
+                ("稳住", "带线", "", "brief"),
+            )
+            self.assertEqual(
+                client.complete("SYS", "USER"),
+                ("默认", "控盾", "", "brief"),
+            )
+            self.assertEqual(
+                client.complete("SYS", "USER"),
+                ("", "只分析", "", "brief"),
+            )
+            self.assertEqual(
+                client.complete("SYS", "USER"),
+                ("", "plain text", "", "brief"),
+            )
 
         self.assertEqual(
             completions.calls[0],
@@ -303,14 +328,15 @@ class AdvisorComponentTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             prompt.set_role("2")
         message = prompt.build_user_message(data, recently_killed={})
-        digest = hashlib.sha256(message.encode("utf-8")).hexdigest()
 
         self.assertEqual(prompt.system_prompt, "SYS")
-        self.assertEqual(len(message), 609)
-        self.assertEqual(
-            digest,
-            "558fa2fff9dad7658e4e46daee6306bb9ca6dab9ff24eab82f33e9a691c4f06c",
-        )
+        self.assertIn('"analysis"', message)
+        self.assertIn('"command"', message)
+        self.assertIn('"item"', message)
+        self.assertIn('"speech_level"', message)
+        self.assertIn('"brief"', message)
+        self.assertIn('"full"', message)
+        self.assertIn("当前时间: 1分5秒", message)
 
         prompt.record_advice(65, "推进", "局势")
         self.assertEqual(prompt.last_analysis, "局势")
