@@ -4,5 +4,5 @@ logs/
 .env
 venv/
 .claude/settings.local.json
-/docs/superpowers
+docs/
 .worktrees/
