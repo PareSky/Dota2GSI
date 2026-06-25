@@ -6,6 +6,8 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+import yaml
+
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
@@ -72,6 +74,21 @@ class LoggingConfigTests(unittest.TestCase):
                 handler._on_vision_event(event)
             event_log_exists = (Path(log_dir) / "vision_events.jsonl").exists()
         self.assertTrue(event_log_exists)
+
+
+class TtsConfigTests(unittest.TestCase):
+    def test_repo_config_yaml_has_tts_defaults(self):
+        config_path = Path(__file__).resolve().parents[1] / "config.yaml"
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            config["tts"],
+            {
+                "rate": 4,
+                "full_max_seconds": 25,
+                "estimated_chars_per_second": 7,
+                "timeout_buffer_seconds": 8,
+            },
+        )
 
 
 if __name__ == "__main__":

@@ -14,6 +14,17 @@ vision:
   # 是否启用敌方视野检测
   enabled: true
 
+# Windows SAPI 语音播报
+tts:
+  # 语速，范围 -10 到 10
+  rate: 4
+  # full 战略播报的目标最长秒数
+  full_max_seconds: 25
+  # 本地时长预算估算（每秒朗读字符数，含标点间隔）
+  estimated_chars_per_second: 7
+  # PowerShell 进程启动与收尾缓冲秒数
+  timeout_buffer_seconds: 8
+
 # AI 教练建议（DeepSeek API）
 ai_advisor:
   # 是否启用 AI 教练

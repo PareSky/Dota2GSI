@@ -55,6 +55,10 @@ C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestat
 | `logging.log_dir` | 所有日志的输出目录 | `./logs` |
 | `logging.session_file` | 是否创建每局 GSI JSONL 日志 | `true` |
 | `vision.enabled` | 是否启用敌方视野追踪 | `true` |
+| `tts.rate` | Windows SAPI 语速，范围 -10 到 10 | `4` |
+| `tts.full_max_seconds` | full 战略播报的目标最长秒数 | `25` |
+| `tts.estimated_chars_per_second` | 每秒朗读字符数估算（含标点间隔） | `7` |
+| `tts.timeout_buffer_seconds` | PowerShell 进程启动与收尾缓冲秒数 | `8` |
 | `ai_advisor.enabled` | 是否启用 AI 教练 | `true` |
 | `ai_advisor.api_key` | DeepSeek API Key，也可使用 `DeepSeekApiKey` 环境变量 | 空 |
 | `ai_advisor.base_url` | OpenAI 兼容 API 地址 | `https://api.deepseek.com` |
@@ -79,6 +83,15 @@ C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestat
 ```text
 <logging.log_dir>/vision_events.jsonl
 ```
+
+### AI 语音播报级别
+
+AI 教练会在 JSON 响应中携带 `speech_level` 字段，可选 `"brief"` 或 `"full"`：
+
+- **brief**：仅播报战术指令和出装建议，适合重复性常规建议。
+- **full**：追加战略分析前缀，在局势变化、阶段转换或关键克制首次出现时触发。
+
+无效或缺失的级别自动降级为 `brief`。full 模式下，当分析文本超出 `tts.full_max_seconds` 时间预算时，系统会在自然句边界截断分析部分，始终保证指令和出装建议完整播报。
 
 AI Key 推荐通过当前用户环境变量配置：
 
