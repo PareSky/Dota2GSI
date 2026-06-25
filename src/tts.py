@@ -187,16 +187,35 @@ def hero_cn_name(raw_name: str) -> str:
 
 
 # ==========================================================================
+# 语音请求数据类
+# ==========================================================================
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class SpeechRequest:
+    text: str
+    category: str = "alert"
+
+
+# ==========================================================================
 # 语音队列
 # ==========================================================================
 
 class SpeechQueue:
     """串行播放队列：逐条朗读，不会重叠"""
 
-    def __init__(self):
+    def __init__(self, settings):
+        self._settings = settings
         self._queue: queue.Queue = queue.Queue()
+        self._queue_lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._running = False
+
+    def configure(self, settings) -> None:
+        """更新语音设置"""
+        self._settings = settings
 
     def start(self) -> None:
         """启动后台播放线程"""
@@ -211,47 +230,97 @@ class SpeechQueue:
         self._running = False
         self._queue.put(None)
 
-    def say(self, text: str) -> None:
+    def say(self, text, category="alert"):
         """将文本加入播放队列（立即返回，不阻塞）"""
-        if sys.platform != "win32":
-            return
-        self._queue.put(text)
+        with self._queue_lock:
+            self._queue.put(SpeechRequest(text, category))
 
-    def _worker(self) -> None:
-        """后台线程：逐条取出并同步朗读"""
-        ps1_path = resource_path("src", "speak.ps1")
-
-        while self._running:
-            text = self._queue.get()
-            if text is None:
-                break
-            try:
-                subprocess.run(
-                    ["powershell", "-ExecutionPolicy", "Bypass", "-File", ps1_path, "-text", text],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
-                    timeout=30,
-                )
-            except Exception:
-                pass
+    def clear_pending(self, category=None):
+        """清除待播放队列中匹配类别的请求"""
+        kept = []
+        with self._queue_lock:
+            while True:
+                try:
+                    request = self._queue.get_nowait()
+                except queue.Empty:
+                    break
+                if request is None:
+                    kept.append(request)
+                elif category is not None and request.category != category:
+                    kept.append(request)
+            for request in kept:
+                self._queue.put(request)
 
     def clear(self) -> None:
         """清空待播放队列"""
-        while not self._queue.empty():
-            try:
-                self._queue.get_nowait()
-            except queue.Empty:
+        self.clear_pending()
+
+    def pending_requests(self):
+        """返回待播放请求列表（用于测试）"""
+        with self._queue_lock:
+            return list(self._queue.queue)
+
+    def _worker(self) -> None:
+        """后台线程：逐条取出并同步朗读"""
+        while self._running:
+            request = self._queue.get()
+            if request is None:
                 break
+            try:
+                self._run_request(request.text)
+            except Exception:
+                pass
+
+    def _run_request(self, text):
+        """执行 PowerShell TTS 子进程"""
+        ps1_path = resource_path("src", "speak.ps1")
+        subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                ps1_path,
+                "-text",
+                text,
+                "-rate",
+                str(self._settings.rate),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            timeout=self._settings.subprocess_timeout(text),
+        )
 
 
+_speech_settings = None
 _speech_queue: SpeechQueue | None = None
 
 
-def speak(text: str) -> None:
+def configure_speech(config):
+    """全局语音配置入口"""
+    global _speech_settings, _speech_queue
+    from speech_policy import SpeechSettings
+    _speech_settings = SpeechSettings.from_config(config)
+    if _speech_queue is not None:
+        _speech_queue.configure(_speech_settings)
+
+
+def clear_pending_speech(category=None):
+    """清除待播放队列中匹配类别的请求"""
+    if _speech_queue is not None:
+        _speech_queue.clear_pending(category)
+
+
+def speak(text, category="alert"):
     """全局入口：加入语音队列"""
-    global _speech_queue
+    global _speech_settings, _speech_queue
+    if sys.platform != "win32":
+        return
+    if _speech_settings is None:
+        from speech_policy import SpeechSettings
+        _speech_settings = SpeechSettings()
     if _speech_queue is None:
-        _speech_queue = SpeechQueue()
+        _speech_queue = SpeechQueue(_speech_settings)
         _speech_queue.start()
-    _speech_queue.say(text)
+    _speech_queue.say(text, category)
