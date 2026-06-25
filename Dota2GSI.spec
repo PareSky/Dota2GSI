@@ -9,6 +9,7 @@ a = Analysis(
         ('src/speak.ps1', 'src'),
         ('config.yaml', '.'),
         ('AIPromt.md', '.'),
+        ('gamestate_integration_gsi_config.cfg', '.'),
         ('Dota2MechanismOntology', 'Dota2MechanismOntology'),
     ],
     hiddenimports=[],

@@ -27,6 +27,7 @@ from flask import Flask, request, jsonify
 
 from gsi_handler import GSIHandler
 from resource_utils import resource_path
+from dota2_setup import setup_gsi_config
 
 app = Flask(__name__)
 handler: GSIHandler = None  # 由 main() 初始化
@@ -72,6 +73,12 @@ def main():
     config_path = os.path.abspath(config_path)
 
     config = load_config(config_path)
+
+    setup_result = setup_gsi_config()
+    prefix = "[OK]" if setup_result.ok else "[WARN]"
+    path_suffix = f": {setup_result.path}" if setup_result.path else ""
+    print(f"{prefix} {setup_result.message}{path_suffix}")
+
     handler = GSIHandler(config)
 
     server_cfg = config.get("server", {})
@@ -88,11 +95,7 @@ def main():
 ║  健康检查 : http://{host}:{port}/health{'':<16} ║
 ╚══════════════════════════════════════════════╝
 
-📋 Dota 2 配置步骤:
-   1. 将 gsi_config.cfg 复制到:
-      C:\\Program Files (x86)\\Steam\\steamapps\\common\\dota 2 beta\\game\\dota\\cfg\\gamestate_integration\\
-   2. 重启 Dota 2 或开一局游戏
-   3. 数据会自动推送到本服务器
+📋 GSI 配置已在上方自动检测/安装。如安装成功，重启 Dota 2 即可生效。
 
 🔑 AI 教练配置（可选）:
    方式一: 设置环境变量 DeepSeekApiKey=sk-你的key

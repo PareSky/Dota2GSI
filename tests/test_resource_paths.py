@@ -33,7 +33,12 @@ class PyInstallerResourceTests(unittest.TestCase):
     def test_spec_and_build_script_bundle_all_runtime_resources(self):
         spec = (PROJECT_ROOT / "Dota2GSI.spec").read_text(encoding="utf-8")
         build = (PROJECT_ROOT / "build.bat").read_text(encoding="utf-8")
-        for resource in ("config.yaml", "AIPromt.md", "src/speak.ps1"):
+        for resource in (
+            "config.yaml",
+            "AIPromt.md",
+            "src/speak.ps1",
+            "gamestate_integration_gsi_config.cfg",
+        ):
             self.assertIn(resource, spec.replace("\\", "/"))
             self.assertIn(resource, build.replace("\\", "/"))
 
