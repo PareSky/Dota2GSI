@@ -11,11 +11,17 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from vision_tracker import VisionTracker, VisionEvent
-from tts import hero_cn_name, speak
+from tts import (
+    clear_pending_speech,
+    configure_speech,
+    hero_cn_name,
+    speak,
+)
 from game_timer import GameTimer, TimerEvent
 from ai_advisor import AdvisorEvent
 from ai_worker import AiAdvisorWorker
 from role_selector import RoleSelector
+from speech_policy import SpeechSettings, compose_advisor_speech
 
 
 class GSIHandler:
@@ -36,6 +42,11 @@ class GSIHandler:
         self.vision_enabled: bool = vision_cfg.get("enabled", True)
         self._vision_tracker = VisionTracker() if self.vision_enabled else None
         self._game_timer = GameTimer()
+
+        # TTS 语音配置
+        tts_cfg = config.get("tts", {})
+        configure_speech(tts_cfg)
+        self._speech_settings = SpeechSettings.from_config(tts_cfg)
 
         # AI 教练
         advisor_cfg = config.get("ai_advisor", {})
@@ -118,6 +129,8 @@ class GSIHandler:
 
     def _start_new_session(self) -> None:
         """开始新的日志会话"""
+        clear_pending_speech("advisor")
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"gsi_session_{ts}.jsonl"
         self._session_file_path = (
@@ -207,13 +220,16 @@ class GSIHandler:
 
     def _on_advisor_event(self, event: AdvisorEvent) -> None:
         """AI 教练建议：控制台打印分析 + 语音朗读指令"""
-        # if event.analysis_text:
-        #     print(f"  📊 {event.analysis_text}")
         if event.advice_text:
-            text = event.advice_text
-            if event.item_text:
-                text += f"。出装建议：{event.item_text}"
-            speak(text)
+            text = compose_advisor_speech(
+                analysis=event.analysis_text,
+                command=event.advice_text,
+                item=event.item_text,
+                speech_level=event.speech_level,
+                settings=self._speech_settings,
+            )
+            if text:
+                speak(text, category="advisor")
 
     def _on_night_fall(self) -> None:
         """进入夜晚：控制台 + 语音"""

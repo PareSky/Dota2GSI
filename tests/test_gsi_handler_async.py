@@ -5,10 +5,12 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
+from ai_advisor import AdvisorEvent
 from gsi_handler import GSIHandler
 
 
@@ -68,6 +70,103 @@ class GSIHandlerAsyncTests(unittest.TestCase):
             ai_worker.calls,
             [("reset", None), ("role", "2"), ("submit", 1)],
         )
+
+
+def make_event(level):
+    return AdvisorEvent(
+        advice_text="控盾逼团",
+        analysis_text="我方团战更强，应主动控制肉山区域。",
+        item_text="黑皇杖",
+        game_time=900,
+        timestamp="2026-06-25T00:00:00",
+        speech_level=level,
+    )
+
+
+class GSIHandlerAdvisorSpeechTests(unittest.TestCase):
+    def test_brief_excludes_analysis(self):
+        with tempfile.TemporaryDirectory() as log_dir:
+            handler = GSIHandler(
+                {
+                    "logging": {"log_dir": log_dir},
+                    "vision": {"enabled": False},
+                    "ai_advisor": {"enabled": False},
+                }
+            )
+            with (
+                patch("gsi_handler.configure_speech") as mock_configure,
+                patch("gsi_handler.speak") as mock_speak,
+            ):
+                handler._on_advisor_event(make_event("brief"))
+            mock_speak.assert_called_once()
+            text = mock_speak.call_args[0][0]
+            self.assertIn("控盾逼团", text)
+            self.assertIn("出装建议：黑皇杖", text)
+            self.assertNotIn("战略分析", text)
+            self.assertEqual(mock_speak.call_args[1]["category"], "advisor")
+
+    def test_full_includes_all_sections(self):
+        with tempfile.TemporaryDirectory() as log_dir:
+            handler = GSIHandler(
+                {
+                    "logging": {"log_dir": log_dir},
+                    "vision": {"enabled": False},
+                    "ai_advisor": {"enabled": False},
+                }
+            )
+            with (
+                patch("gsi_handler.configure_speech") as mock_configure,
+                patch("gsi_handler.speak") as mock_speak,
+            ):
+                handler._on_advisor_event(make_event("full"))
+            mock_speak.assert_called_once()
+            text = mock_speak.call_args[0][0]
+            self.assertIn("战略分析", text)
+            self.assertIn("战术指令", text)
+            self.assertIn("出装建议", text)
+            self.assertEqual(mock_speak.call_args[1]["category"], "advisor")
+
+    def test_configure_speech_receives_tts_config(self):
+        with tempfile.TemporaryDirectory() as log_dir:
+            tts_cfg = {
+                "rate": 4,
+                "full_max_seconds": 25,
+                "estimated_chars_per_second": 7,
+                "timeout_buffer_seconds": 8,
+            }
+            with patch("gsi_handler.configure_speech") as mock_configure:
+                GSIHandler(
+                    {
+                        "logging": {"log_dir": log_dir},
+                        "vision": {"enabled": False},
+                        "ai_advisor": {"enabled": False},
+                        "tts": tts_cfg,
+                    }
+                )
+            mock_configure.assert_called_once_with(tts_cfg)
+
+    def test_new_session_clears_pending_advisor(self):
+        with tempfile.TemporaryDirectory() as log_dir:
+            handler = GSIHandler(
+                {
+                    "logging": {"log_dir": log_dir},
+                    "vision": {"enabled": False},
+                    "ai_advisor": {"enabled": False},
+                }
+            )
+            payload = {
+                "map": {
+                    "clock_time": 1,
+                    "game_state": "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS",
+                },
+                "hero": {"alive": True},
+            }
+            with (
+                patch("gsi_handler.clear_pending_speech") as mock_clear,
+                redirect_stdout(io.StringIO()),
+            ):
+                handler.handle(json.dumps(payload).encode("utf-8"))
+            mock_clear.assert_called_once_with("advisor")
 
 
 if __name__ == "__main__":
