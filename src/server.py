@@ -65,9 +65,12 @@ def load_config(config_path: str) -> dict:
 def main():
     global handler
 
-    # 配置文件路径：优先使用命令行参数，否则查找项目根目录
+    # 配置文件路径：优先使用命令行参数，其次 exe 同目录，最后源码目录
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
+    elif getattr(sys, "frozen", False):
+        # 打包后：exe 同目录下的 config.yaml（用户可编辑）
+        config_path = os.path.join(os.path.dirname(sys.executable), "config.yaml")
     else:
         config_path = resource_path("config.yaml")
     config_path = os.path.abspath(config_path)

@@ -6,3 +6,6 @@ venv/
 .claude/settings.local.json
 docs/
 .worktrees/
+build/
+dist/
+*.spec
