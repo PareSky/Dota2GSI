@@ -15,7 +15,7 @@ from advisor.logging import AdvisorLogger
 from advisor.ontology import EnemyKnowledgeBuilder, OntologyRepository
 from advisor.prompt import PromptBuilder
 from advisor.trigger import TriggerController
-from resource_utils import resource_path
+from resource_utils import editable_resource_path
 
 
 @dataclass
@@ -52,7 +52,7 @@ class AiAdvisor:
                 "./Dota2MechanismOntology",
             )
             if not os.path.isabs(ontology_path):
-                ontology_path = resource_path(ontology_path)
+                ontology_path = editable_resource_path(ontology_path)
             repository = OntologyRepository(ontology_path)
             knowledge_builder = EnemyKnowledgeBuilder(
                 repository=repository,

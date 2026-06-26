@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from advisor.extractor import StateExtractor
 from advisor.ontology import EnemyKnowledgeBuilder
-from resource_utils import resource_path
+from resource_utils import editable_resource_path
 from tts import hero_cn_name
 
 
@@ -30,7 +30,7 @@ class PromptBuilder:
         system_prompt_file = config.get("system_prompt_file", "")
         if system_prompt_file:
             if not os.path.isabs(system_prompt_file):
-                system_prompt_file = resource_path(system_prompt_file)
+                system_prompt_file = editable_resource_path(system_prompt_file)
             if os.path.exists(system_prompt_file):
                 with open(system_prompt_file, "r", encoding="utf-8") as file:
                     return file.read()
