@@ -83,9 +83,11 @@ class AiAdvisor:
             api_key=config.get("api_key", "")
             or os.environ.get("DeepSeekApiKey", ""),
             base_url=config.get("base_url", "https://api.deepseek.com"),
-            model=config.get("model", "deepseek-chat"),
+            model=config.get("model", "deepseek-v4-pro"),
             max_tokens=config.get("max_tokens", 60),
             temperature=config.get("temperature", 0.7),
+            extra_body=config.get("extra_body", {}),
+            timeout_seconds=config.get("timeout_seconds", 30),
         )
         self._logger = AdvisorLogger(log_dir)
 

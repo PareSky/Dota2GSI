@@ -33,14 +33,16 @@ class PyInstallerResourceTests(unittest.TestCase):
     def test_spec_and_build_script_bundle_all_runtime_resources(self):
         spec = (PROJECT_ROOT / "Dota2GSI.spec").read_text(encoding="utf-8")
         build = (PROJECT_ROOT / "build.bat").read_text(encoding="utf-8")
-        for resource in (
-            "config.yaml",
-            "AIPromt.md",
-            "src/speak.ps1",
-            "gamestate_integration_gsi_config.cfg",
-        ):
+        build_norm = build.replace("\\", "/")
+        # 打进 exe 的内部文件
+        for resource in ("src/speak.ps1", "gamestate_integration_gsi_config.cfg"):
             self.assertIn(resource, spec.replace("\\", "/"))
-            self.assertIn(resource, build.replace("\\", "/"))
+            self.assertIn(resource, build_norm)
+        # 暴露在 dist\ 的用户可编辑文件（build.bat copy/xcopy，不在 spec datas 中）
+        spec_norm = spec.replace("\\", "/")
+        for resource in ("config.yaml", "AIPromt.md", "Dota2MechanismOntology"):
+            self.assertIn(resource, build_norm)
+            self.assertNotIn(resource, spec_norm)
 
 
 if __name__ == "__main__":

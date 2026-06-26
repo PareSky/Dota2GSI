@@ -25,26 +25,35 @@ tts:
   # PowerShell 进程启动与收尾缓冲秒数
   timeout_buffer_seconds: 8
 
-# AI 教练建议（DeepSeek API）
+# AI 教练建议（OpenAI-compatible API）
 ai_advisor:
   # 是否启用 AI 教练
   enabled: true
-  # DeepSeek API Key（必填）
+  # API Key（必填，支持 DeepSeek / Qwen / Doubao 等兼容接口）
   api_key: ""
-  # API 地址
+  # OpenAI-compatible API base URL. Examples:
+  # DeepSeek: https://api.deepseek.com
+  # Qwen/DashScope: https://dashscope.aliyuncs.com/compatible-mode/v1
+  # Doubao/Volcengine Ark: https://ark.cn-beijing.volces.com/api/v3
   base_url: "https://api.deepseek.com"
   # 模型名称
   model: "deepseek-v4-pro"
   # 查询间隔（游戏内分钟数）
   interval_minutes: 1
-  # 最大回复 token 数（分析+指令+JSON结构，需要更多空间）
+  # 最大回复 token 数
   max_tokens: 500
-  # 创造性参数（低温度减少废话和JSON格式错误）
+  # 创造性参数
   temperature: 0.2
   # 系统提示词文件路径（优先级高于 system_prompt 字段）
   system_prompt_file: "./AIPromt.md"
   # 系统提示词（仅 system_prompt_file 不存在时生效）
   system_prompt: "你是一个专业的 Dota 2 教练。直接给出建议，不要解释。"
+  # 请求超时秒数
+  timeout_seconds: 30
+  # 厂商特定请求字段。Doubao / Qwen 留空 {}；DeepSeek 需关闭内置思考模式
+  extra_body:
+    thinking:
+      type: "disabled"
   # 提示词日志目录
   prompt_log_dir: "./logs"
   # Dota 2 机制本体，用于动态补充敌方特性与反制候选

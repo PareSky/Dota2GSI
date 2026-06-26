@@ -182,27 +182,56 @@ class AiAdvisorGoldenTests(unittest.TestCase):
         self.assertEqual(advice_entry["analysis"], "ANALYSIS")
         self.assertEqual(advice_entry["command"], "COMMAND")
 
+    def test_ai_advisor_passes_http_client_options(self):
+        with tempfile.TemporaryDirectory() as log_dir:
+            advisor = AiAdvisor(
+                {
+                    "enabled": True,
+                    "system_prompt": "SYS",
+                    "prompt_log_dir": log_dir,
+                    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    "model": "qwen-plus",
+                    "extra_body": {"enable_search": False},
+                    "timeout_seconds": 9,
+                }
+            )
+
+        self.assertEqual(
+            advisor._client._base_url,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        self.assertEqual(advisor._client._model, "qwen-plus")
+        self.assertEqual(advisor._client._extra_body, {"enable_search": False})
+        self.assertEqual(advisor._client._timeout_seconds, 9)
+
 
 class AdvisorComponentTests(unittest.TestCase):
     def test_client_preserves_json_and_fallback_parsing(self):
         from advisor.client import AdvisorClient
 
-        class Completions:
-            def __init__(self, contents):
-                self.contents = iter(contents)
-                self.calls = []
-
-            def create(self, **kwargs):
-                self.calls.append(kwargs)
-                message = types.SimpleNamespace(
-                    content=next(self.contents),
-                    reasoning_content="",
-                )
-                return types.SimpleNamespace(
-                    choices=[types.SimpleNamespace(message=message)]
+        class FakeResponse:
+            def __init__(self, content):
+                self._content = content
+                self.text = json.dumps(
+                    {
+                        "choices": [
+                            {"message": {"content": content}},
+                        ]
+                    },
+                    ensure_ascii=False,
                 )
 
-        completions = Completions(
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "choices": [
+                        {"message": {"content": self._content}},
+                    ]
+                }
+
+        responses = iter(
             [
                 '{"analysis":"局势","command":"推进","item":"黑皇杖","speech_level":"full"}',
                 '{"analysis":"稳住","command":"带线","item":"","speech_level":"loud"}',
@@ -211,20 +240,31 @@ class AdvisorComponentTests(unittest.TestCase):
                 "plain text",
             ]
         )
-        fake_client = types.SimpleNamespace(
-            chat=types.SimpleNamespace(completions=completions)
-        )
-        fake_openai = types.SimpleNamespace(OpenAI=lambda **kwargs: fake_client)
+        calls = []
+
+        def fake_post(url, headers, json, timeout):
+            calls.append(
+                {
+                    "url": url,
+                    "headers": headers,
+                    "json": json,
+                    "timeout": timeout,
+                }
+            )
+            return FakeResponse(next(responses))
+
         client = AdvisorClient(
             api_key="key",
             base_url="https://example.test",
             model="model",
             max_tokens=500,
             temperature=0.2,
+            extra_body={"thinking": {"type": "disabled"}},
+            timeout_seconds=12,
         )
 
         with (
-            patch.dict(sys.modules, {"openai": fake_openai}),
+            patch("advisor.client.requests.post", side_effect=fake_post),
             redirect_stdout(io.StringIO()),
             redirect_stderr(io.StringIO()),
         ):
@@ -250,18 +290,56 @@ class AdvisorComponentTests(unittest.TestCase):
             )
 
         self.assertEqual(
-            completions.calls[0],
+            calls[0],
             {
-                "model": "model",
-                "messages": [
-                    {"role": "system", "content": "SYS"},
-                    {"role": "user", "content": "USER"},
-                ],
-                "max_tokens": 500,
-                "temperature": 0.2,
-                "extra_body": {"thinking": {"type": "disabled"}},
+                "url": "https://example.test/v1/chat/completions",
+                "headers": {
+                    "Authorization": "Bearer key",
+                    "Content-Type": "application/json",
+                },
+                "json": {
+                    "model": "model",
+                    "messages": [
+                        {"role": "system", "content": "SYS"},
+                        {"role": "user", "content": "USER"},
+                    ],
+                    "max_tokens": 500,
+                    "temperature": 0.2,
+                    "thinking": {"type": "disabled"},
+                },
+                "timeout": 12,
             },
         )
+
+    def test_client_normalizes_chat_completion_url(self):
+        from advisor.client import AdvisorClient
+
+        cases = [
+            ("https://api.deepseek.com", "https://api.deepseek.com/v1/chat/completions"),
+            ("https://api.deepseek.com/v1", "https://api.deepseek.com/v1/chat/completions"),
+            (
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            ),
+            (
+                "https://ark.cn-beijing.volces.com/api/v3",
+                "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+            ),
+            (
+                "https://custom.example/chat/completions",
+                "https://custom.example/chat/completions",
+            ),
+        ]
+
+        for base_url, expected_url in cases:
+            client = AdvisorClient(
+                api_key="key",
+                base_url=base_url,
+                model="model",
+                max_tokens=500,
+                temperature=0.2,
+            )
+            self.assertEqual(client._chat_completions_url(), expected_url)
 
     def test_logger_preserves_jsonl_schema(self):
         from advisor.logging import AdvisorLogger

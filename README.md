@@ -1,6 +1,6 @@
 # Dota 2 GSI Listener
 
-一个 Windows 上运行的 Dota 2 实时游戏助手。它通过 Flask 接收 Dota 2 GSI 数据，记录游戏状态、追踪敌方视野、提醒资源刷新，并可调用 DeepSeek 提供语音战术建议。
+一个 Windows 上运行的 Dota 2 实时游戏助手。它通过 Flask 接收 Dota 2 GSI 数据，记录游戏状态、追踪敌方视野、提醒资源刷新，并可调用 OpenAI 兼容接口（DeepSeek / Qwen / Doubao 等）提供语音战术建议。
 
 ## 功能
 
@@ -63,6 +63,8 @@ C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestat
 | `ai_advisor.api_key` | DeepSeek API Key，也可使用 `DeepSeekApiKey` 环境变量 | 空 |
 | `ai_advisor.base_url` | OpenAI 兼容 API 地址 | `https://api.deepseek.com` |
 | `ai_advisor.model` | 请求的模型名称 | `deepseek-v4-pro` |
+| `ai_advisor.timeout_seconds` | HTTP 请求超时秒数 | `30` |
+| `ai_advisor.extra_body` | 厂商特定请求字段 | `{thinking: {type: disabled}}` |
 | `ai_advisor.interval_minutes` | 定时分析间隔，单位为游戏内分钟 | `1` |
 | `ai_advisor.max_tokens` | AI 最大输出 token 数 | `500` |
 | `ai_advisor.temperature` | AI 温度参数 | `0.2` |
@@ -105,6 +107,34 @@ AI Key 推荐通过当前用户环境变量配置：
 
 重新打开终端后生效。
 
+### 多厂商配置示例
+
+DeepSeek:
+
+```yaml
+base_url: "https://api.deepseek.com"
+model: "deepseek-v4-pro"
+extra_body:
+  thinking:
+    type: "disabled"
+```
+
+Qwen / DashScope:
+
+```yaml
+base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model: "qwen-plus"
+extra_body: {}
+```
+
+Doubao / Volcengine Ark:
+
+```yaml
+base_url: "https://ark.cn-beijing.volces.com/api/v3"
+model: "your-endpoint-or-model-id"
+extra_body: {}
+```
+
 ## 项目结构
 
 ```text
@@ -120,7 +150,7 @@ Dota2GSI/
 │   │   ├── trigger.py     # 定时、比分变化与冷却状态机
 │   │   ├── extractor.py   # GSI 状态与地图信息提取
 │   │   ├── prompt.py      # 系统提示词和用户消息构建
-│   │   ├── client.py      # DeepSeek/OpenAI 兼容 API
+│   │   ├── client.py      # 轻量 OpenAI 兼容 HTTP 客户端
 │   │   └── logging.py     # 提示词与建议 JSONL 日志
 │   ├── role_selector.py   # 独立进程分路窗口
 │   ├── tts.py             # TTS 队列与英雄名映射
@@ -144,5 +174,6 @@ Dota2GSI/
 dist\Dota2GSI.exe
 ```
 
-EXE 会打包 `config.yaml`、`AIPromt.md`、`src/speak.ps1` 和
-`Dota2MechanismOntology` 机制本体目录。
+EXE 仅打包 `speak.ps1` 和 `gamestate_integration_gsi_config.cfg` 两个内部文件。
+`config.yaml`、`AIPromt.md` 和 `Dota2MechanismOntology` 位于 `dist\` 目录，
+用户可直接编辑，无需重新构建。
