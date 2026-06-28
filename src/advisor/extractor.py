@@ -309,11 +309,17 @@ class StateExtractor:
             + ", ".join(f"夜魇{name}" for name in dire_alive)
             if dire_alive else "夜魇塔: 无视野"
         )
+        hero_alive = hero.get("alive", True)
+        health_str = (
+            f"血量: {hero.get('health_percent', 0)}%"
+            if hero_alive
+            else "血量: 已死亡"
+        )
+        mana_str = f"蓝量: {hero.get('mana_percent', 0)}%" if hero_alive else ""
         return "\n".join(
             [
                 f"等级: Lv{hero.get('level', 0)}",
-                f"血量: {hero.get('health_percent', 0)}%  "
-                f"蓝量: {hero.get('mana_percent', 0)}%",
+                f"{health_str}  {mana_str}".rstrip(),
                 f"KDA: {player.get('kills', 0)}/"
                 f"{player.get('deaths', 0)}/{player.get('assists', 0)}",
                 f"补刀: {player.get('last_hits', 0)}/{player.get('denies', 0)}",
