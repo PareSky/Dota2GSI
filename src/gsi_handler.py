@@ -63,8 +63,7 @@ class GSIHandler:
         self._session_file_path: Optional[str] = None
         self._last_daytime: Optional[bool] = None  # 上一帧是否为白天
         self._last_write_time: float = -1  # 上次写入日志的游戏时间
-        self._last_game_state: str = ""  # 上一帧的 game_state
-        self._last_game_time: float = -1  # 上一帧的 clock_time（用于检测新游戏）
+        self._last_matchid: Optional[str] = None  # 上一帧的 matchid（用于检测新游戏）
 
         os.makedirs(self.log_dir, exist_ok=True)
 
@@ -78,24 +77,16 @@ class GSIHandler:
 
         game_time = self._extract_game_time(data)
 
-        # 检测新游戏开始（两种方式互补）：
-        #   1. game_state 从非 GAME_IN_PROGRESS 变为 GAME_IN_PROGRESS
-        #   2. game_state 为 GAME_IN_PROGRESS 且 clock_time 大幅回退
-        #      （上一局结束后 GSI 停止推送导致 _last_game_state 未变化时的兜底）
-        game_state = data.get("map", {}).get("game_state", "")
-        is_new_by_state = (
-            game_state == "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
-            and self._last_game_state != "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
+        # 检测新游戏开始：以 map.matchid 判断是否同一局
+        matchid = data.get("map", {}).get("matchid")
+        is_new_game = (
+            matchid is not None
+            and matchid != self._last_matchid
         )
-        is_new_by_time = (
-            game_state == "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
-            and self._last_game_time > 60   # 上一帧游戏已进行超过 1 分钟
-            and 0 <= game_time < 10         # 当前帧游戏刚开始不到 10 秒
-        )
-        if is_new_by_state or is_new_by_time:
+        if is_new_game:
             self._start_new_session()
-        self._last_game_state = game_state
-        self._last_game_time = game_time
+        if matchid is not None:
+            self._last_matchid = matchid
 
         # 视野追踪
         if self._vision_tracker:
@@ -162,8 +153,6 @@ class GSIHandler:
             self._ai_worker.reset()
         self._last_daytime = None
         self._last_write_time = -1
-        self._last_game_state = "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
-        self._last_game_time = -1
 
         print(f"\n{'='*60}")
         print(f"🆕 新游戏会话: {filename}")
