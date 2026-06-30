@@ -104,6 +104,7 @@ class AiAdvisor:
             return []
 
         self._extractor.accumulate_lineups(data)
+        self._extractor.update_hero_visibility(data)
         decision = self._trigger.evaluate(data)
         if not decision.should_query:
             return []

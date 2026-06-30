@@ -388,6 +388,63 @@ class AdvisorComponentTests(unittest.TestCase):
         self.assertIn("装备: blink(cd:5s)", player)
         self.assertIn("技能: dragon_slave:lv4(cd:3s)", player)
 
+    def test_extractor_reports_missing_heroes_with_last_seen_context(self):
+        from advisor.extractor import StateExtractor
+
+        extractor = StateExtractor()
+        first = sample_data(clock_time=65)
+        second = sample_data(clock_time=95)
+        del second["minimap"]["enemy"]
+
+        extractor.accumulate_lineups(first)
+        extractor.update_hero_visibility(first)
+        positions = extractor.extract_hero_positions(second)
+
+        self.assertIn("消失30秒", positions)
+        self.assertIn("(524,652)", positions)
+        self.assertIn("不可见不等于死亡", positions)
+        self.assertIn("只有“刚死亡”来自比分变化判断", positions)
+
+        killed_positions = extractor.extract_hero_positions(
+            second,
+            recently_killed={3: ["斧王"]},
+        )
+        self.assertIn("刚死亡(夜魇): 斧王", killed_positions)
+        self.assertIn("不可见不等于死亡", killed_positions)
+
+    def test_extractor_reports_damaged_building_health(self):
+        from advisor.extractor import StateExtractor
+
+        extractor = StateExtractor()
+        data = sample_data()
+        data["buildings"] = {
+            "radiant": {
+                "dota_goodguys_tower1_top": {
+                    "health": 1800,
+                    "max_health": 1800,
+                },
+                "dota_goodguys_tower1_mid": {
+                    "health": 900,
+                    "max_health": 1800,
+                },
+            },
+            "dire": {
+                "dota_badguys_tower2_bot": {
+                    "health": 1000,
+                    "max_health": 2500,
+                },
+            },
+        }
+
+        buildings = extractor.extract_building_health(data)
+        player = extractor.build_player_state(data)
+
+        self.assertIn("建筑血量", buildings)
+        self.assertIn("天辉中一塔900/1800(50%)", buildings)
+        self.assertIn("夜魇下二塔1000/2500(40%)", buildings)
+        self.assertNotIn("天辉上一塔1800/1800", buildings)
+        self.assertIn("建筑血量", player)
+
     def test_prompt_builder_preserves_golden_message_and_history(self):
         from advisor.extractor import StateExtractor
         from advisor.prompt import PromptBuilder

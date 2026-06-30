@@ -39,6 +39,46 @@ class StateExtractor:
         "下一塔", "下二塔", "下三塔",
         "基地塔",
     ]
+    BUILDING_NAME_MAP = {
+        "dota_goodguys_tower1_top": "天辉上一塔",
+        "dota_goodguys_tower2_top": "天辉上二塔",
+        "dota_goodguys_tower3_top": "天辉上三塔",
+        "dota_goodguys_tower1_mid": "天辉中一塔",
+        "dota_goodguys_tower2_mid": "天辉中二塔",
+        "dota_goodguys_tower3_mid": "天辉中三塔",
+        "dota_goodguys_tower1_bot": "天辉下一塔",
+        "dota_goodguys_tower2_bot": "天辉下二塔",
+        "dota_goodguys_tower3_bot": "天辉下三塔",
+        "dota_goodguys_tower4_top": "天辉基地塔",
+        "dota_goodguys_tower4_bot": "天辉基地塔",
+        "dota_goodguys_tower4": "天辉基地塔",
+        "dota_badguys_tower1_top": "夜魇上一塔",
+        "dota_badguys_tower2_top": "夜魇上二塔",
+        "dota_badguys_tower3_top": "夜魇上三塔",
+        "dota_badguys_tower1_mid": "夜魇中一塔",
+        "dota_badguys_tower2_mid": "夜魇中二塔",
+        "dota_badguys_tower3_mid": "夜魇中三塔",
+        "dota_badguys_tower1_bot": "夜魇下一塔",
+        "dota_badguys_tower2_bot": "夜魇下二塔",
+        "dota_badguys_tower3_bot": "夜魇下三塔",
+        "dota_badguys_tower4_top": "夜魇基地塔",
+        "dota_badguys_tower4_bot": "夜魇基地塔",
+        "dota_badguys_tower4": "夜魇基地塔",
+        "good_rax_melee_top": "天辉上路近战兵营",
+        "good_rax_range_top": "天辉上路远程兵营",
+        "good_rax_melee_mid": "天辉中路近战兵营",
+        "good_rax_range_mid": "天辉中路远程兵营",
+        "good_rax_melee_bot": "天辉下路近战兵营",
+        "good_rax_range_bot": "天辉下路远程兵营",
+        "bad_rax_melee_top": "夜魇上路近战兵营",
+        "bad_rax_range_top": "夜魇上路远程兵营",
+        "bad_rax_melee_mid": "夜魇中路近战兵营",
+        "bad_rax_range_mid": "夜魇中路远程兵营",
+        "bad_rax_melee_bot": "夜魇下路近战兵营",
+        "bad_rax_range_bot": "夜魇下路远程兵营",
+        "dota_goodguys_fort": "天辉遗迹",
+        "dota_badguys_fort": "夜魇遗迹",
+    }
     LANDMARKS = [
         ("夜魇上路一塔", -5274, 6036, "dire"),
         ("夜魇上路二塔", -128, 6016, "dire"),
@@ -80,10 +120,14 @@ class StateExtractor:
             "dire": [],
         }
         self._lineups_seen: set = set()
+        self._last_seen_heroes: Dict[str, Dict[str, Any]] = {}
+        self._visible_hero_names: set = set()
 
     def reset(self) -> None:
         self.team_lineups = {"radiant": [], "dire": []}
         self._lineups_seen = set()
+        self._last_seen_heroes = {}
+        self._visible_hero_names = set()
 
     def accumulate_lineups(self, data: Dict[str, Any]) -> None:
         if sum(map(len, self.team_lineups.values())) >= 10:
@@ -157,11 +201,61 @@ class StateExtractor:
                 result[team].add(name)
         return result
 
+    def update_hero_visibility(self, data: Dict[str, Any]) -> None:
+        clock_time = data.get("map", {}).get("clock_time", 0)
+        current: Dict[str, Dict[str, Any]] = {}
+        for obj in data.get("minimap", {}).values():
+            image = obj.get("image", "")
+            if "herocircle" not in image and image != "minimap_enemyicon":
+                continue
+            team = obj.get("team")
+            hero_name = obj.get("name") or obj.get("unitname", "")
+            if team not in (2, 3) or not hero_name.startswith("npc_dota_hero_"):
+                continue
+            xpos = obj.get("xpos", 0)
+            ypos = obj.get("ypos", 0)
+            current[hero_name] = {
+                "team": team,
+                "xpos": xpos,
+                "ypos": ypos,
+                "clock_time": clock_time,
+                "landmark": self.nearest_landmark(xpos, ypos),
+            }
+        self._visible_hero_names = set(current)
+        self._last_seen_heroes.update(current)
+
+    def extract_building_health(self, data: Dict[str, Any]) -> str:
+        damaged: List[str] = []
+        for side_buildings in data.get("buildings", {}).values():
+            if not isinstance(side_buildings, dict):
+                continue
+            for building_id, info in side_buildings.items():
+                if not isinstance(info, dict):
+                    continue
+                name = self.BUILDING_NAME_MAP.get(building_id)
+                if not name:
+                    continue
+                health = info.get("health")
+                max_health = info.get("max_health")
+                if health is None or max_health is None or max_health <= 0:
+                    continue
+                if health >= max_health:
+                    continue
+                percent = int(round(health * 100 / max_health))
+                damaged.append(
+                    f"{name}{health}/{max_health}({percent}%)"
+                )
+        if not damaged:
+            return "建筑血量: 未发现受损关键塔"
+        return "建筑血量: " + "; ".join(damaged[:8])
+
     def extract_hero_positions(
         self,
         data: Dict[str, Any],
         recently_killed: Optional[Dict[int, List[str]]] = None,
     ) -> str:
+        self.update_hero_visibility(data)
+        clock_time = data.get("map", {}).get("clock_time", 0)
         player_is_radiant = (
             data.get("player", {}).get("team_name", "") == "radiant"
         )
@@ -194,17 +288,50 @@ class StateExtractor:
             elif team == 3:
                 dire_heroes.append(line)
         notes: List[str] = []
+        killed_names = set()
         if recently_killed:
             if recently_killed.get(2):
+                killed_names.update(recently_killed[2])
                 notes.append(
                     f"刚死亡(天辉): {', '.join(recently_killed[2])}"
                 )
             if recently_killed.get(3):
+                killed_names.update(recently_killed[3])
                 notes.append(
                     f"刚死亡(夜魇): {', '.join(recently_killed[3])}"
                 )
-        else:
-            notes.append("(未列出的英雄可能不在视野内，不一定已死亡)")
+        missing = []
+        for team, team_name in ((2, "天辉"), (3, "夜魇")):
+            lineup_names = sorted(
+                hero_name
+                for seen_team, hero_name in self._lineups_seen
+                if seen_team == team
+            )
+            for hero_name in lineup_names:
+                if hero_name in seen:
+                    continue
+                cn_name = hero_cn_name(hero_name)
+                if cn_name in killed_names:
+                    continue
+                last_seen = self._last_seen_heroes.get(hero_name)
+                if last_seen:
+                    disappeared = max(
+                        0,
+                        int(clock_time - last_seen.get("clock_time", 0)),
+                    )
+                    missing.append(
+                        f"{team_name}{cn_name}上次({last_seen.get('xpos', 0)},"
+                        f"{last_seen.get('ypos', 0)})→"
+                        f"{last_seen.get('landmark', '未知位置')}, "
+                        f"消失{disappeared}秒"
+                    )
+                else:
+                    missing.append(f"{team_name}{cn_name}当前不可见")
+        if missing:
+            notes.append("不可见英雄: " + "; ".join(missing))
+        notes.append(
+            "说明: 不可见不等于死亡，只有“刚死亡”来自比分变化判断。"
+        )
         radiant = (
             f"天辉({len(radiant_heroes)}人): "
             f"{', '.join(radiant_heroes) if radiant_heroes else '未知'}"
@@ -309,6 +436,7 @@ class StateExtractor:
             + ", ".join(f"夜魇{name}" for name in dire_alive)
             if dire_alive else "夜魇塔: 无视野"
         )
+        building_health = self.extract_building_health(data)
         hero_alive = hero.get("alive", True)
         health_str = (
             f"血量: {hero.get('health_percent', 0)}%"
@@ -329,5 +457,6 @@ class StateExtractor:
                 f"技能: {' '.join(skill_levels)}",
                 radiant_towers,
                 dire_towers,
+                building_health,
             ]
         )
