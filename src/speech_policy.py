@@ -64,20 +64,22 @@ def _trim_at_boundary(text, limit):
 def compose_advisor_speech(
     analysis,
     command,
+    fight,
     item,
     speech_level,
     settings,
 ):
+    fight_part = f"团战思路：{fight}" if fight else ""
     item_part = f"出装建议：{item}" if item else ""
     brief_text = "。".join(
-        part for part in (command, item_part) if part
+        part for part in (command, fight_part, item_part) if part
     )
     if speech_level != "full" or not analysis:
         return brief_text
 
     command_part = f"战术指令：{command}" if command else ""
     full_action_text = "。".join(
-        part for part in (command_part, item_part) if part
+        part for part in (command_part, fight_part, item_part) if part
     )
     prefix = "战略分析："
     separator = "。" if full_action_text else ""

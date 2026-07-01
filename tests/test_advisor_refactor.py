@@ -95,6 +95,7 @@ class AiAdvisorGoldenTests(unittest.TestCase):
 
         self.assertIn('"analysis"', message)
         self.assertIn('"command"', message)
+        self.assertIn('"fight"', message)
         self.assertIn('"item"', message)
         self.assertIn('"speech_level"', message)
         self.assertIn('"brief"', message)
@@ -117,6 +118,7 @@ class AiAdvisorGoldenTests(unittest.TestCase):
             advisor._call_api = lambda message: queries.append(message) or (
                 "analysis",
                 "command",
+                "fight",
                 "item",
                 "full",
             )
@@ -139,6 +141,7 @@ class AiAdvisorGoldenTests(unittest.TestCase):
         self.assertIsInstance(timer_event[0], AdvisorEvent)
         self.assertEqual(timer_event[0].advice_text, "command")
         self.assertEqual(timer_event[0].analysis_text, "analysis")
+        self.assertEqual(timer_event[0].fight_text, "fight")
         self.assertEqual(timer_event[0].item_text, "item")
         self.assertEqual(timer_event[0].speech_level, "full")
         self.assertEqual(score_event[0].game_time, 85)
@@ -233,8 +236,8 @@ class AdvisorComponentTests(unittest.TestCase):
 
         responses = iter(
             [
-                '{"analysis":"局势","command":"推进","item":"黑皇杖","speech_level":"full"}',
-                '{"analysis":"稳住","command":"带线","item":"","speech_level":"loud"}',
+                '{"analysis":"局势","command":"推进","fight":"后排输出","item":"黑皇杖","speech_level":"full"}',
+                '{"analysis":"稳住","command":"带线","fight":"别先露头","item":"","speech_level":"loud"}',
                 '{"analysis":"默认","command":"控盾","item":""}',
                 '{"analysis":"只分析","command":"","speech_level":"full"}',
                 "plain text",
@@ -270,23 +273,23 @@ class AdvisorComponentTests(unittest.TestCase):
         ):
             self.assertEqual(
                 client.complete("SYS", "USER"),
-                ("局势", "推进", "黑皇杖", "full"),
+                ("局势", "推进", "后排输出", "黑皇杖", "full"),
             )
             self.assertEqual(
                 client.complete("SYS", "USER"),
-                ("稳住", "带线", "", "brief"),
+                ("稳住", "带线", "别先露头", "", "brief"),
             )
             self.assertEqual(
                 client.complete("SYS", "USER"),
-                ("默认", "控盾", "", "brief"),
+                ("默认", "控盾", "", "", "brief"),
             )
             self.assertEqual(
                 client.complete("SYS", "USER"),
-                ("", "只分析", "", "brief"),
+                ("", "只分析", "", "", "brief"),
             )
             self.assertEqual(
                 client.complete("SYS", "USER"),
-                ("", "plain text", "", "brief"),
+                ("", "plain text", "", "", "brief"),
             )
 
         self.assertEqual(
@@ -466,6 +469,7 @@ class AdvisorComponentTests(unittest.TestCase):
         self.assertEqual(prompt.system_prompt, "SYS")
         self.assertIn('"analysis"', message)
         self.assertIn('"command"', message)
+        self.assertIn('"fight"', message)
         self.assertIn('"item"', message)
         self.assertIn('"speech_level"', message)
         self.assertIn('"brief"', message)

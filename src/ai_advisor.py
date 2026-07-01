@@ -22,6 +22,7 @@ from resource_utils import editable_resource_path
 class AdvisorEvent:
     advice_text: str
     analysis_text: str
+    fight_text: str
     item_text: str
     game_time: float
     timestamp: str
@@ -31,6 +32,7 @@ class AdvisorEvent:
         return (
             f"AI教练[分析]: {self.analysis_text}\n"
             f"AI教练[指令]: {self.advice_text}\n"
+            f"AI教练[团战]: {self.fight_text}\n"
             f"AI教练[出装]: {self.item_text}"
         )
 
@@ -119,13 +121,14 @@ class AiAdvisor:
         if result is None:
             return []
 
-        analysis, command, item, speech_level = result
+        analysis, command, fight, item, speech_level = result
         self._prompt.record_advice(clock_time, command, analysis)
         self._log_advice(command, clock_time, analysis)
         return [
             AdvisorEvent(
                 advice_text=command,
                 analysis_text=analysis,
+                fight_text=fight,
                 item_text=item,
                 game_time=clock_time,
                 timestamp=datetime.now().isoformat(timespec="seconds"),
@@ -183,7 +186,7 @@ class AiAdvisor:
     def _call_api(
         self,
         user_message: str,
-    ) -> Optional[tuple[str, str, str, str]]:
+    ) -> Optional[tuple[str, str, str, str, str]]:
         return self._client.complete(
             self._prompt.system_prompt,
             user_message,

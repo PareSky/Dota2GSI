@@ -76,6 +76,7 @@ def make_event(level):
     return AdvisorEvent(
         advice_text="控盾逼团",
         analysis_text="我方团战更强，应主动控制肉山区域。",
+        fight_text="后排边缘输出，等先手后进场",
         item_text="黑皇杖",
         game_time=900,
         timestamp="2026-06-25T00:00:00",
@@ -101,8 +102,13 @@ class GSIHandlerAdvisorSpeechTests(unittest.TestCase):
             mock_speak.assert_called_once()
             text = mock_speak.call_args[0][0]
             self.assertIn("控盾逼团", text)
+            self.assertIn("团战思路：后排边缘输出，等先手后进场", text)
             self.assertIn("出装建议：黑皇杖", text)
             self.assertNotIn("战略分析", text)
+            self.assertLess(
+                text.index("团战思路"),
+                text.index("出装建议"),
+            )
             self.assertEqual(mock_speak.call_args[1]["category"], "advisor")
 
     def test_full_includes_all_sections(self):
@@ -123,7 +129,12 @@ class GSIHandlerAdvisorSpeechTests(unittest.TestCase):
             text = mock_speak.call_args[0][0]
             self.assertIn("战略分析", text)
             self.assertIn("战术指令", text)
+            self.assertIn("团战思路", text)
             self.assertIn("出装建议", text)
+            self.assertLess(
+                text.index("团战思路"),
+                text.index("出装建议"),
+            )
             self.assertEqual(mock_speak.call_args[1]["category"], "advisor")
 
     def test_configure_speech_receives_tts_config(self):

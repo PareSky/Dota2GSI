@@ -228,6 +228,7 @@ class GSIHandler:
             text = compose_advisor_speech(
                 analysis=event.analysis_text,
                 command=event.advice_text,
+                fight=event.fight_text,
                 item=event.item_text,
                 speech_level=event.speech_level,
                 settings=self._speech_settings,

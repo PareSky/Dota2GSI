@@ -71,7 +71,7 @@ class AdvisorClient:
         self,
         system_prompt: str,
         user_message: str,
-    ) -> Optional[tuple[str, str, str, str]]:
+    ) -> Optional[tuple[str, str, str, str, str]]:
         if not self._api_key:
             if not self._warned_no_key:
                 print(
@@ -106,11 +106,13 @@ class AdvisorClient:
                 parsed = json.loads(result)
                 analysis = parsed.get("analysis", "")
                 command = parsed.get("command", "")
+                fight = parsed.get("fight", "")
                 item = parsed.get("item", "")
                 speech_level = parsed.get("speech_level", "brief")
 
                 analysis = analysis if isinstance(analysis, str) else ""
                 command = command if isinstance(command, str) else ""
+                fight = fight if isinstance(fight, str) else ""
                 item = item if isinstance(item, str) else ""
                 if speech_level not in {"brief", "full"}:
                     speech_level = "brief"
@@ -120,16 +122,17 @@ class AdvisorClient:
                     speech_level = "brief"
                 print(f"  🤖 AI 战略分析: {analysis}")
                 print(f"  🤖 AI 战术指令: {command}")
+                print(f"  🤖 AI 团战思路: {fight}")
                 print(f"  🤖 AI 出装建议: {item}")
                 print(f"  🤖 AI 播报级别: {speech_level}")
-                return analysis, command, item, speech_level
+                return analysis, command, fight, item, speech_level
             except json.JSONDecodeError:
                 print(
                     "  [AI Advisor] JSON解析失败，将全文作为指令",
                     file=sys.stderr,
                 )
                 print(f"  🤖 AI 回复: {result}")
-                return "", result, "", "brief"
+                return "", result, "", "", "brief"
         except Exception as exc:
             print(f"  [AI Advisor] API 调用失败: {exc}", file=sys.stderr)
             return None
