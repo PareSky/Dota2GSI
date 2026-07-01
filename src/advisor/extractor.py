@@ -1,5 +1,6 @@
 """从 Dota 2 GSI 数据提取 AI 教练所需状态。"""
 
+import re
 from typing import Any, Dict, List, Optional
 
 from tts import hero_cn_name
@@ -10,7 +11,6 @@ class StateExtractor:
         "slot0", "slot1", "slot2", "slot3", "slot4", "slot5",
         "neutral0", "teleport0",
     ]
-    ABILITY_SLOTS = ["ability0", "ability1", "ability2", "ability3", "ability4", "ability5"]
     TOWER_NAME_MAP = {
         "dota_goodguys_tower1_top": "上一塔",
         "dota_goodguys_tower2_top": "上二塔",
@@ -394,17 +394,22 @@ class StateExtractor:
                 if cd > 0:
                     short_name += f"(cd:{cd:.0f}s)"
                 item_names.append(short_name)
+        hero_name = hero.get("name", "")
+        hero_prefix = hero_name.replace("npc_dota_hero_", "") if hero_name else ""
         skill_levels = []
-        for ab_key in self.ABILITY_SLOTS:
-            ability = data.get("abilities", {}).get(ab_key, {})
+        abilities = data.get("abilities", {})
+        for ab_key in sorted(abilities):
+            if not re.match(r"^ability\d+$", ab_key):
+                continue
+            ability = abilities[ab_key]
             level = ability.get("level", 0)
             name = ability.get("name", "")
             cd = ability.get("cooldown", 0) or 0
             cd_str = f"(cd:{cd:.0f}s)" if cd > 0 else ""
             if name:
                 short = name.split(".")[-1] if "." in name else name
-                parts = short.split("_", 1)
-                short = parts[1] if len(parts) > 1 else short
+                if hero_prefix and short.startswith(hero_prefix + "_"):
+                    short = short[len(hero_prefix) + 1:]
                 skill_levels.append(f"{short}:lv{level}{cd_str}")
             else:
                 skill_levels.append(f"技能{ab_key[-1]}:lv{level}{cd_str}")
