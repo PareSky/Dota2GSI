@@ -10,7 +10,7 @@ class StateExtractor:
         "slot0", "slot1", "slot2", "slot3", "slot4", "slot5",
         "neutral0", "teleport0",
     ]
-    ABILITY_SLOTS = ["ability0", "ability1", "ability2", "ability3"]
+    ABILITY_SLOTS = ["ability0", "ability1", "ability2", "ability3", "ability4", "ability5"]
     TOWER_NAME_MAP = {
         "dota_goodguys_tower1_top": "上一塔",
         "dota_goodguys_tower2_top": "上二塔",
