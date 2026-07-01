@@ -81,17 +81,17 @@ def compose_advisor_speech(
     full_action_text = "。".join(
         part for part in (command_part, fight_part, item_part) if part
     )
-    prefix = "战略分析："
+    analysis_prefix = "战略分析："
     separator = "。" if full_action_text else ""
     max_chars = int(
         settings.full_max_seconds
         * settings.estimated_chars_per_second
     )
     analysis_budget = max_chars - len(
-        prefix + separator + full_action_text
+        full_action_text + separator + analysis_prefix
     )
     trimmed = _trim_at_boundary(analysis, analysis_budget)
     if not trimmed:
         return brief_text
     trimmed = trimmed.rstrip(_BOUNDARIES)
-    return f"{prefix}{trimmed}{separator}{full_action_text}"
+    return f"{full_action_text}{separator}{analysis_prefix}{trimmed}"

@@ -135,6 +135,10 @@ class GSIHandlerAdvisorSpeechTests(unittest.TestCase):
                 text.index("团战思路"),
                 text.index("出装建议"),
             )
+            self.assertLess(
+                text.index("出装建议"),
+                text.index("战略分析"),
+            )
             self.assertEqual(mock_speak.call_args[1]["category"], "advisor")
 
     def test_configure_speech_receives_tts_config(self):

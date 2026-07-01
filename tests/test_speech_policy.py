@@ -51,7 +51,7 @@ class SpeechCompositionTests(unittest.TestCase):
         )
         self.assertEqual(
             text,
-            "战略分析：我方团战更强。战术指令：控盾逼团。团战思路：等先手后再进场。出装建议：黑皇杖",
+            "战术指令：控盾逼团。团战思路：等先手后再进场。出装建议：黑皇杖。战略分析：我方团战更强",
         )
 
     def test_invalid_level_downgrades_to_brief(self):
@@ -79,7 +79,10 @@ class SpeechTrimTests(unittest.TestCase):
         self.assertIn("战术指令：推上路二塔", text)
         self.assertIn("团战思路：后排边缘输出", text)
         self.assertIn("出装建议：黑皇杖", text)
-        self.assertTrue(text.endswith("出装建议：黑皇杖"))
+        self.assertLess(
+            text.index("出装建议"),
+            text.index("战略分析"),
+        )
 
     def test_tiny_budget_still_preserves_command_and_item(self):
         settings = SpeechSettings(
